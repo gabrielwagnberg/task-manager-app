@@ -162,7 +162,7 @@
 
         /* Item List */
         .item-list {
-            margin-bottom: 20px;
+            margin-bottom: 0;
         }
 
         .item {
@@ -665,6 +665,7 @@
             font-family: inherit;
             cursor: pointer;
             margin-top: 8px;
+            margin-bottom: 8px;
             transition: all 0.2s;
         }
 
@@ -882,9 +883,17 @@
 
             activeSection = sectionName;
 
+            // Recurring filter is Tasks-only — reset it when leaving Tasks.
+            if (activeProjectFilter === 'recurring' && sectionName !== 'tasks') {
+                activeProjectFilter = 'all';
+            }
+
             // The project filter bar only applies to Tasks & Shopping.
+            // Re-render pills so the Recurring pill appears on Tasks and not on Shopping.
             const filterBar = document.getElementById('project-filter-bar');
-            filterBar.classList.toggle('visible', sectionName === 'tasks' || sectionName === 'shopping');
+            const showFilter = sectionName === 'tasks' || sectionName === 'shopping';
+            filterBar.classList.toggle('visible', showFilter);
+            if (showFilter) renderProjectFilter();
 
             // Lazy load Shopping, Notes, Projects; re-render Today on tab switch
             if (sectionName === 'shopping' && !shoppingLoaded) {
@@ -931,11 +940,13 @@
             const form = document.getElementById('tasks-form');
 
             // Apply filters: project + hide recurring tasks that aren't due yet.
+            // Exception: the Recurring overview shows ALL recurring tasks.
             const today = todayStr();
+            const recurringOverview = activeProjectFilter === 'recurring';
             const visible = tasks.filter(t => {
                 if (!matchesProjectFilter(t)) return false;
-                // Recurring tasks are hidden until their next due date arrives.
-                if (t.recurring && t.nextDue && t.nextDue > today) return false;
+                // Recurring tasks are hidden until due — but not in the Recurring overview.
+                if (!recurringOverview && t.recurring && t.nextDue && t.nextDue > today) return false;
                 return true;
             });
 
@@ -943,6 +954,8 @@
                 let msg;
                 if (tasks.length === 0) {
                     msg = 'No tasks yet. Add one to get started!';
+                } else if (activeProjectFilter === 'recurring') {
+                    msg = 'No recurring tasks yet.';
                 } else if (activeProjectFilter !== 'all') {
                     msg = 'No tasks in this project.';
                 } else {
@@ -1322,9 +1335,10 @@
 
         async function deleteCheckedTasks() {
             const today = todayStr();
+            const recurringOverview = activeProjectFilter === 'recurring';
             const done = tasks.filter(t => {
                 if (!matchesProjectFilter(t)) return false;
-                if (t.recurring && t.nextDue && t.nextDue > today) return false;
+                if (!recurringOverview && t.recurring && t.nextDue && t.nextDue > today) return false;
                 return t.completed;
             });
             if (done.length === 0) return;
@@ -1483,10 +1497,11 @@
         }
 
         // Does an item pass the active project filter?
-        // When a specific project is active, unassigned items (no project) are hidden —
-        // they only appear under "All".
+        // When a specific project is active, unassigned items (no project) are hidden.
+        // 'recurring' is a special built-in filter that shows only recurring tasks.
         function matchesProjectFilter(item) {
             if (activeProjectFilter === 'all') return true;
+            if (activeProjectFilter === 'recurring') return !!item.recurring;
             const proj = String(item.project || '').trim();
             return proj !== '' && proj === String(activeProjectFilter);
         }
@@ -1498,7 +1513,9 @@
                 projects = data;
                 projectsLoaded = true;
                 // If the active filter points to a project that no longer exists, reset it.
-                if (activeProjectFilter !== 'all' && !projects.some(p => p.id == activeProjectFilter)) {
+                // 'all' and 'recurring' are built-in filters — never reset them.
+                const builtIn = activeProjectFilter === 'all' || activeProjectFilter === 'recurring';
+                if (!builtIn && !projects.some(p => p.id == activeProjectFilter)) {
                     activeProjectFilter = 'all';
                 }
                 renderProjectFilter();
@@ -1510,13 +1527,19 @@
             }
         }
 
-        // Render the top filter bar (All + one pill per project).
+        // Render the top filter bar (All + one pill per project + Recurring on Tasks).
         function renderProjectFilter() {
             const bar = document.getElementById('project-filter-bar');
             const pills = [{ id: 'all', name: 'All' }, ...projects];
+            // Recurring overview is only meaningful in the Tasks tab.
+            if (activeSection === 'tasks') {
+                pills.push({ id: 'recurring', name: '🔁 Recurring' });
+            }
             bar.innerHTML = pills.map(p => {
                 const active = String(activeProjectFilter) === String(p.id) ? ' active' : '';
-                const label = p.id === 'all' ? 'All' : escapeHtml(p.name);
+                const label = p.id === 'all' ? 'All'
+                    : p.id === 'recurring' ? '🔁 Recurring'
+                    : escapeHtml(p.name);
                 return `<button class="project-pill${active}" onclick="setProjectFilter('${p.id}')">${label}</button>`;
             }).join('');
         }
