@@ -690,39 +690,7 @@
                 <div id="tasks-error" class="error"></div>
                 <div id="tasks-loading" class="loading">Loading tasks...</div>
                 <div id="tasks-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="toggleForm('tasks')">＋  Add Task</button>
-
-                <div class="add-form" id="tasks-form" hidden>
-                    <div class="form-row">
-                        <input type="text" id="task-name" placeholder="Task name..." autocomplete="off">
-                    </div>
-                    <div class="form-row" id="task-due-row">
-                        <input type="date" id="task-due">
-                    </div>
-                    <div class="form-row recur-fields" id="recur-fields" hidden>
-                        <label class="recur-label" for="task-frequency">Repeat every</label>
-                        <input type="number" id="task-frequency" class="recur-num" min="1" value="1">
-                        <select id="task-rate" class="recur-rate">
-                            <option value="days">days</option>
-                            <option value="weeks">weeks</option>
-                            <option value="months">months</option>
-                        </select>
-                    </div>
-                    <div class="form-row">
-                        <select id="task-project" class="project-select">
-                            <option value="">No project</option>
-                        </select>
-                    </div>
-                    <div class="privacy-toggle">
-                        <input type="checkbox" id="task-recurring">
-                        <label for="task-recurring">Recurring</label>
-                    </div>
-                    <div class="privacy-toggle">
-                        <input type="checkbox" id="task-private">
-                        <label for="task-private">Private</label>
-                    </div>
-                    <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
-                </div>
+                <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
             </section>
 
             <!-- SHOPPING SECTION -->
@@ -735,23 +703,7 @@
                 <div id="shopping-error" class="error"></div>
                 <div id="shopping-loading" class="loading">Loading shopping items...</div>
                 <div id="shopping-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="toggleForm('shopping')">＋  Add Item</button>
-
-                <div class="add-form" id="shopping-form" hidden>
-                    <div class="form-row">
-                        <input type="text" id="shopping-item-name" placeholder="Add item..." autocomplete="off">
-                        <button type="submit" class="add-btn" id="shopping-add-btn">Add</button>
-                    </div>
-                    <div class="form-row">
-                        <select id="shopping-project" class="project-select">
-                            <option value="">No project</option>
-                        </select>
-                    </div>
-                    <div class="privacy-toggle">
-                        <input type="checkbox" id="shopping-private">
-                        <label for="shopping-private">Private</label>
-                    </div>
-                </div>
+                <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')">＋  Add Item</button>
             </section>
 
             <!-- NOTES SECTION -->
@@ -759,21 +711,7 @@
                 <div id="notes-error" class="error"></div>
                 <div id="notes-loading" class="loading">Loading notes...</div>
                 <div id="notes-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="toggleForm('notes')">＋  Add Note</button>
-
-                <div class="add-form" id="notes-form" hidden>
-                    <textarea id="note-content" placeholder="Write a note..."></textarea>
-                    <div class="form-row">
-                        <select id="note-project" class="project-select">
-                            <option value="">No project</option>
-                        </select>
-                    </div>
-                    <div class="privacy-toggle">
-                        <input type="checkbox" id="note-private">
-                        <label for="note-private">Private</label>
-                    </div>
-                    <button type="submit" class="add-btn" id="note-add-btn">Add Note</button>
-                </div>
+                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="openAddModal('notes')">＋  Add Note</button>
             </section>
 
             <!-- PROJECTS SECTION -->
@@ -781,18 +719,7 @@
                 <div id="projects-error" class="error"></div>
                 <div id="projects-loading" class="loading">Loading projects...</div>
                 <div id="projects-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="toggleForm('projects')">＋  Add Project</button>
-
-                <div class="add-form" id="projects-form" hidden>
-                    <div class="form-row">
-                        <input type="text" id="project-name" placeholder="New project name..." autocomplete="off">
-                        <button type="submit" class="add-btn" id="project-add-btn">Add</button>
-                    </div>
-                    <div class="privacy-toggle">
-                        <input type="checkbox" id="project-private">
-                        <label for="project-private">Private</label>
-                    </div>
-                </div>
+                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="openAddModal('projects')">＋  Add Project</button>
             </section>
         </div>
     </div>
@@ -820,6 +747,15 @@
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="switchToDetailMode()">Cancel</button>
                     <button class="modal-btn modal-btn-primary" onclick="saveEdit()">Save</button>
+                </div>
+            </div>
+
+            <!-- Add view -->
+            <div id="modal-add" hidden>
+                <div class="modal-edit-form" id="modal-add-form"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button class="modal-btn modal-btn-primary" id="modal-add-submit-btn" onclick="submitAddForm()">Add</button>
                 </div>
             </div>
         </div>
@@ -1037,7 +973,7 @@
                     rateInput.value = 'days';
                     document.getElementById('recur-fields').hidden = true;
                     document.getElementById('task-due-row').hidden = false;
-                    toggleForm('tasks', false);
+                    closeModal();
                     await loadTasks();
                 } else {
                     showError('tasks', 'Failed to add task');
@@ -1187,7 +1123,7 @@
                     nameInput.value = '';
                     privateCheckbox.checked = false;
                     projectInput.value = '';
-                    toggleForm('shopping', false);
+                    closeModal();
                     await loadShopping();
                 } else {
                     showError('shopping', 'Failed to add item');
@@ -1319,7 +1255,7 @@
                     contentInput.value = '';
                     privateCheckbox.checked = false;
                     projectInput.value = '';
-                    toggleForm('notes', false);
+                    closeModal();
                     await loadNotes();
                 } else {
                     showError('notes', 'Failed to add note');
@@ -1469,7 +1405,7 @@
                 if (response.ok) {
                     nameInput.value = '';
                     privateCheckbox.checked = false;
-                    toggleForm('projects', false);
+                    closeModal();
                     await loadProjects();
                 } else {
                     showError('projects', 'Failed to add project');
@@ -1526,22 +1462,132 @@
             }
         }
 
-        // ===== COLLAPSIBLE FORMS =====
+        // ===== ADD MODAL =====
 
-        const formLabels = {
-            tasks: 'Add Task',
-            shopping: 'Add Item',
-            notes: 'Add Note',
-            projects: 'Add Project',
-        };
+        let addModalSection = null;
 
-        function toggleForm(section, forceOpen) {
-            const form = document.getElementById(`${section}-form`);
-            const btn  = document.getElementById(`${section}-toggle-btn`);
-            const open = forceOpen !== undefined ? forceOpen : form.hidden;
-            form.hidden = !open;
-            btn.classList.toggle('open', open);
-            btn.textContent = open ? `✕  ${formLabels[section]}` : `＋  ${formLabels[section]}`;
+        const addModalTitles  = { tasks: 'New Task',    shopping: 'New Item',    notes: 'New Note',    projects: 'New Project' };
+        const addModalBtnText = { tasks: 'Add Task',    shopping: 'Add Item',    notes: 'Add Note',    projects: 'Add Project' };
+
+        function openAddModal(section) {
+            addModalSection = section;
+            document.getElementById('modal-title').textContent = addModalTitles[section];
+            document.getElementById('modal-add-submit-btn').textContent = addModalBtnText[section];
+            renderAddForm(section);
+            document.getElementById('modal-detail').hidden = true;
+            document.getElementById('modal-edit').hidden   = true;
+            document.getElementById('modal-add').hidden    = false;
+            document.getElementById('modal-overlay').classList.add('open');
+        }
+
+        function renderAddForm(section) {
+            const form = document.getElementById('modal-add-form');
+            const projOptions = '<option value="">No project</option>' +
+                projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+
+            if (section === 'tasks') {
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="task-name" placeholder="Task name..." autocomplete="off"
+                            onkeypress="if(event.key==='Enter') submitAddForm()">
+                    </div>
+                    <div class="modal-field" id="task-due-row">
+                        <div class="modal-field-label">Due date</div>
+                        <input type="date" id="task-due">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="task-recurring" onchange="toggleAddRecurring()">
+                            <span class="modal-field-label" style="margin:0">Recurring</span>
+                        </label>
+                    </div>
+                    <div class="modal-field" id="recur-fields" hidden>
+                        <div class="modal-field-label">Repeat every</div>
+                        <div class="modal-recur-row">
+                            <input type="number" id="task-frequency" min="1" value="1">
+                            <select id="task-rate">
+                                <option value="days">days</option>
+                                <option value="weeks">weeks</option>
+                                <option value="months">months</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="task-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="task-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else if (section === 'shopping') {
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="shopping-item-name" placeholder="Item name..." autocomplete="off"
+                            onkeypress="if(event.key==='Enter') submitAddForm()">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="shopping-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="shopping-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else if (section === 'notes') {
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Note</div>
+                        <textarea id="note-content" placeholder="Write a note..."></textarea>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="note-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="note-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else {
+                // projects
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="project-name" placeholder="Project name..." autocomplete="off"
+                            onkeypress="if(event.key==='Enter') submitAddForm()">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="project-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            }
+        }
+
+        function toggleAddRecurring() {
+            const on = document.getElementById('task-recurring').checked;
+            document.getElementById('recur-fields').hidden = !on;
+            document.getElementById('task-due-row').hidden = on;
+        }
+
+        function submitAddForm() {
+            if (addModalSection === 'tasks')    addTask();
+            else if (addModalSection === 'shopping') addShoppingItem();
+            else if (addModalSection === 'notes')    addNote();
+            else if (addModalSection === 'projects') addProject();
         }
 
         // ===== DETAIL / EDIT MODAL =====
@@ -1565,7 +1611,9 @@
 
         function closeModal() {
             document.getElementById('modal-overlay').classList.remove('open');
+            document.getElementById('modal-add').hidden = true;
             modalItem = null;
+            addModalSection = null;
         }
 
         function handleModalOverlayClick(e) {
@@ -1884,39 +1932,7 @@
             });
         });
 
-        // Task form
-        document.getElementById('task-add-btn').addEventListener('click', addTask);
-        document.getElementById('task-name').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTask();
-        });
-        document.getElementById('task-due').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addTask();
-        });
-
-        // Recurring toggle: reveal frequency/rate inputs, hide the manual due date.
-        document.getElementById('task-recurring').addEventListener('change', (e) => {
-            const on = e.target.checked;
-            document.getElementById('recur-fields').hidden = !on;
-            document.getElementById('task-due-row').hidden = on;
-        });
-
-        // Shopping form
-        document.getElementById('shopping-add-btn').addEventListener('click', addShoppingItem);
-        document.getElementById('shopping-item-name').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addShoppingItem();
-        });
-
-        // Notes form
-        document.getElementById('note-add-btn').addEventListener('click', addNote);
-        document.getElementById('note-content').addEventListener('keypress', (e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
-        });
-
-        // Projects form
-        document.getElementById('project-add-btn').addEventListener('click', addProject);
-        document.getElementById('project-name').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') addProject();
-        });
+        // (Add forms are now rendered dynamically inside the modal — see openAddModal / renderAddForm)
 
         // ===== INIT =====
         initializeUI();
