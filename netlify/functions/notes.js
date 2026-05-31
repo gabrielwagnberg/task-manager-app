@@ -31,15 +31,25 @@ exports.handler = async (event, context) => {
 
   try {
     if (method === 'GET') {
-      // Get all notes
+      // Get all notes visible to the current user
+      const user = event.queryStringParameters?.user;
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Notes'];
       const rows = await sheet.getRows();
 
-      const notes = rows.map(row => ({
+      // Filter: show if shared OR user is the owner
+      const visibleRows = rows.filter(row => {
+        const isShared = row.get('Shared') === 'TRUE' || row.get('Shared') === true;
+        const isOwner = row.get('Owner') === user;
+        return isShared || isOwner;
+      });
+
+      const notes = visibleRows.map(row => ({
         id: row.get('Note ID'),
         content: row.get('Note'),
         dateCreated: row.get('Date Created'),
+        owner: row.get('Owner') || '',
+        shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
       }));
 
       return {
@@ -51,7 +61,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new note
-      const { content } = JSON.parse(event.body);
+      const { content, owner, shared } = JSON.parse(event.body);
 
       if (!content) {
         return {
@@ -74,11 +84,13 @@ exports.handler = async (event, context) => {
         'Note ID': newId,
         'Note': content,
         'Date Created': now,
+        'Owner': owner || '',
+        'Shared': shared ? 'TRUE' : 'FALSE',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, content, dateCreated: now }),
+        body: JSON.stringify({ id: newId, content, dateCreated: now, owner, shared }),
         headers: { 'Content-Type': 'application/json' },
       };
     }

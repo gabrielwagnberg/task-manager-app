@@ -31,16 +31,26 @@ exports.handler = async (event, context) => {
 
   try {
     if (method === 'GET') {
-      // Get all shopping items
+      // Get all shopping items visible to the current user
+      const user = event.queryStringParameters?.user;
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Shopping'];
       const rows = await sheet.getRows();
 
-      const items = rows.map(row => ({
+      // Filter: show if shared OR user is the owner
+      const visibleRows = rows.filter(row => {
+        const isShared = row.get('Shared') === 'TRUE' || row.get('Shared') === true;
+        const isOwner = row.get('Owner') === user;
+        return isShared || isOwner;
+      });
+
+      const items = visibleRows.map(row => ({
         id: row.get('Item ID'),
         name: row.get('Item Name'),
         category: row.get('Category'),
         purchased: row.get('Purchased') === 'TRUE' || row.get('Purchased') === true,
+        owner: row.get('Owner') || '',
+        shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
       }));
 
       return {
@@ -52,7 +62,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new shopping item
-      const { name, category } = JSON.parse(event.body);
+      const { name, category, owner, shared } = JSON.parse(event.body);
 
       if (!name || !category) {
         return {
@@ -73,11 +83,13 @@ exports.handler = async (event, context) => {
         'Item Name': name,
         'Category': category,
         'Purchased': 'FALSE',
+        'Owner': owner || '',
+        'Shared': shared ? 'TRUE' : 'FALSE',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, category, purchased: false }),
+        body: JSON.stringify({ id: newId, name, category, purchased: false, owner, shared }),
         headers: { 'Content-Type': 'application/json' },
       };
     }

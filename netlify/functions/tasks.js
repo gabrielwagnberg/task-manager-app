@@ -31,16 +31,26 @@ exports.handler = async (event, context) => {
 
   try {
     if (method === 'GET') {
-      // Get all tasks
+      // Get all tasks visible to the current user
+      const user = event.queryStringParameters?.user;
       const doc = await initializeSheet();
       const sheet = doc.sheetsByIndex[0];
       const rows = await sheet.getRows();
 
-      const tasks = rows.map(row => ({
+      // Filter: show if shared OR user is the owner
+      const visibleRows = rows.filter(row => {
+        const isShared = row.get('Shared') === 'TRUE' || row.get('Shared') === true;
+        const isOwner = row.get('Owner') === user;
+        return isShared || isOwner;
+      });
+
+      const tasks = visibleRows.map(row => ({
         id: row.get('Task ID'),
         name: row.get('Task Name'),
         completed: row.get('Completed') === 'TRUE' || row.get('Completed') === true,
         dueDate: row.get('Due Date') || '',
+        owner: row.get('Owner') || '',
+        shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
       }));
 
       return {
@@ -52,7 +62,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new task
-      const { name, dueDate } = JSON.parse(event.body);
+      const { name, dueDate, owner, shared } = JSON.parse(event.body);
 
       if (!name) {
         return {
@@ -73,11 +83,13 @@ exports.handler = async (event, context) => {
         'Task Name': name,
         'Completed': 'FALSE',
         'Due Date': dueDate || '',
+        'Owner': owner || '',
+        'Shared': shared ? 'TRUE' : 'FALSE',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, completed: false, dueDate: dueDate || '' }),
+        body: JSON.stringify({ id: newId, name, completed: false, dueDate: dueDate || '', owner, shared }),
         headers: { 'Content-Type': 'application/json' },
       };
     }

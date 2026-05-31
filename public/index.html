@@ -26,6 +26,47 @@
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
 
+        /* User Select Screen */
+        .user-select-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            gap: 20px;
+        }
+
+        .user-select-screen h2 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .user-select-screen button {
+            width: 100%;
+            padding: 16px;
+            font-size: 18px;
+            font-weight: 600;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .user-select-screen button:hover {
+            background: #1d4ed8;
+        }
+
+        .main-app {
+            display: none;
+        }
+
+        .main-app.active {
+            display: block;
+        }
+
         /* Tab Navigation */
         .tab-nav {
             display: flex;
@@ -235,6 +276,21 @@
             background: #1d4ed8;
         }
 
+        /* Privacy Toggle */
+        .privacy-toggle {
+            font-size: 14px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .privacy-toggle input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
         /* Loading & Error */
         .loading {
             text-align: center;
@@ -263,68 +319,110 @@
             padding: 20px;
             font-size: 14px;
         }
+
+        .user-badge {
+            text-align: center;
+            padding: 12px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .user-badge strong {
+            color: #333;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Main Tab Navigation -->
-        <nav class="tab-nav">
-            <button class="tab active" data-section="tasks">📋 Tasks</button>
-            <button class="tab" data-section="shopping">🛒 Shopping</button>
-            <button class="tab" data-section="notes">📝 Notes</button>
-        </nav>
+        <!-- User Select Screen -->
+        <div id="user-select-screen" class="user-select-screen">
+            <h2>Who are you?</h2>
+            <button onclick="selectUser('Gabriel')">Gabriel</button>
+            <button onclick="selectUser('Tompa')">Tompa</button>
+        </div>
 
-        <!-- TASKS SECTION -->
-        <section id="section-tasks" class="section active">
-            <div id="tasks-error" class="error"></div>
-            <div id="tasks-loading" class="loading">Loading tasks...</div>
-            <div id="tasks-list" class="item-list" hidden></div>
+        <!-- Main App (hidden until user selected) -->
+        <div id="main-app" class="main-app">
+            <!-- User Badge -->
+            <div class="user-badge">
+                Logged in as: <strong id="user-display">-</strong>
+            </div>
 
-            <div class="add-form" id="tasks-form" hidden>
-                <div class="form-row">
-                    <input type="text" id="task-name" placeholder="Task name..." autocomplete="off">
+            <!-- Main Tab Navigation -->
+            <nav class="tab-nav">
+                <button class="tab active" data-section="tasks">📋 Tasks</button>
+                <button class="tab" data-section="shopping">🛒 Shopping</button>
+                <button class="tab" data-section="notes">📝 Notes</button>
+            </nav>
+
+            <!-- TASKS SECTION -->
+            <section id="section-tasks" class="section active">
+                <div id="tasks-error" class="error"></div>
+                <div id="tasks-loading" class="loading">Loading tasks...</div>
+                <div id="tasks-list" class="item-list" hidden></div>
+
+                <div class="add-form" id="tasks-form" hidden>
+                    <div class="form-row">
+                        <input type="text" id="task-name" placeholder="Task name..." autocomplete="off">
+                    </div>
+                    <div class="form-row">
+                        <input type="date" id="task-due">
+                        <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
+                    </div>
+                    <div class="privacy-toggle">
+                        <input type="checkbox" id="task-shared" checked>
+                        <label for="task-shared" id="task-shared-label">Shared with Tompa</label>
+                    </div>
                 </div>
-                <div class="form-row">
-                    <input type="date" id="task-due">
-                    <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
+            </section>
+
+            <!-- SHOPPING SECTION -->
+            <section id="section-shopping" class="section">
+                <div class="sub-tab-nav">
+                    <button class="sub-tab active" data-category="Grocery">Grocery</button>
+                    <button class="sub-tab" data-category="Investment">Investment</button>
                 </div>
-            </div>
-        </section>
 
-        <!-- SHOPPING SECTION -->
-        <section id="section-shopping" class="section">
-            <div class="sub-tab-nav">
-                <button class="sub-tab active" data-category="Grocery">Grocery</button>
-                <button class="sub-tab" data-category="Investment">Investment</button>
-            </div>
+                <div id="shopping-error" class="error"></div>
+                <div id="shopping-loading" class="loading">Loading shopping items...</div>
+                <div id="shopping-list" class="item-list" hidden></div>
 
-            <div id="shopping-error" class="error"></div>
-            <div id="shopping-loading" class="loading">Loading shopping items...</div>
-            <div id="shopping-list" class="item-list" hidden></div>
-
-            <div class="add-form" id="shopping-form" hidden>
-                <div class="form-row">
-                    <input type="text" id="shopping-item-name" placeholder="Add item..." autocomplete="off">
-                    <button type="submit" class="add-btn" id="shopping-add-btn">Add</button>
+                <div class="add-form" id="shopping-form" hidden>
+                    <div class="form-row">
+                        <input type="text" id="shopping-item-name" placeholder="Add item..." autocomplete="off">
+                        <button type="submit" class="add-btn" id="shopping-add-btn">Add</button>
+                    </div>
+                    <div class="privacy-toggle">
+                        <input type="checkbox" id="shopping-shared" checked>
+                        <label for="shopping-shared" id="shopping-shared-label">Shared with Tompa</label>
+                    </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        <!-- NOTES SECTION -->
-        <section id="section-notes" class="section">
-            <div id="notes-error" class="error"></div>
-            <div id="notes-loading" class="loading">Loading notes...</div>
-            <div id="notes-list" class="item-list" hidden></div>
+            <!-- NOTES SECTION -->
+            <section id="section-notes" class="section">
+                <div id="notes-error" class="error"></div>
+                <div id="notes-loading" class="loading">Loading notes...</div>
+                <div id="notes-list" class="item-list" hidden></div>
 
-            <div class="add-form" id="notes-form" hidden>
-                <textarea id="note-content" placeholder="Write a note..."></textarea>
-                <button type="submit" class="add-btn" id="note-add-btn">Add Note</button>
-            </div>
-        </section>
+                <div class="add-form" id="notes-form" hidden>
+                    <textarea id="note-content" placeholder="Write a note..."></textarea>
+                    <div class="privacy-toggle">
+                        <input type="checkbox" id="note-shared" checked>
+                        <label for="note-shared" id="note-shared-label">Shared with Tompa</label>
+                    </div>
+                    <button type="submit" class="add-btn" id="note-add-btn">Add Note</button>
+                </div>
+            </section>
+        </div>
     </div>
 
     <script>
         // ===== STATE =====
+        let currentUser = localStorage.getItem('currentUser');
         let tasks = [];
         let shoppingItems = [];
         let notes = [];
@@ -332,6 +430,36 @@
         let activeShoppingCategory = 'Grocery';
         let shoppingLoaded = false;
         let notesLoaded = false;
+
+        // ===== USER SELECTION =====
+
+        function initializeUI() {
+            if (!currentUser) {
+                // Show user select screen
+                document.getElementById('user-select-screen').style.display = 'flex';
+                document.getElementById('main-app').classList.remove('active');
+            } else {
+                // Show main app
+                document.getElementById('user-select-screen').style.display = 'none';
+                document.getElementById('main-app').classList.add('active');
+                document.getElementById('user-display').textContent = currentUser;
+
+                // Update shared labels
+                const otherUser = currentUser === 'Gabriel' ? 'Tompa' : 'Gabriel';
+                document.getElementById('task-shared-label').textContent = `Shared with ${otherUser}`;
+                document.getElementById('shopping-shared-label').textContent = `Shared with ${otherUser}`;
+                document.getElementById('note-shared-label').textContent = `Shared with ${otherUser}`;
+
+                // Load initial data
+                loadTasks();
+            }
+        }
+
+        function selectUser(name) {
+            currentUser = name;
+            localStorage.setItem('currentUser', name);
+            initializeUI();
+        }
 
         // ===== UTILITIES =====
 
@@ -363,11 +491,17 @@
             }
         }
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // ===== TASKS =====
 
         async function loadTasks() {
             try {
-                const response = await fetch('/api/tasks');
+                const response = await fetch(`/api/tasks?user=${encodeURIComponent(currentUser)}`);
                 const data = await response.json();
                 tasks = data;
                 renderTasks();
@@ -385,21 +519,25 @@
             if (tasks.length === 0) {
                 taskList.innerHTML = '<div class="empty-state">No tasks yet. Add one to get started!</div>';
             } else {
-                taskList.innerHTML = tasks.map(task => `
-                    <div class="item">
-                        <input
-                            type="checkbox"
-                            ${task.completed ? 'checked' : ''}
-                            onchange="toggleTask(${task.id}, this.checked)"
-                            id="task-${task.id}"
-                        >
-                        <div class="item-content">
-                            <label for="task-${task.id}">${escapeHtml(task.name)}</label>
-                            ${task.dueDate ? `<div class="item-meta"><span class="item-due-date">Due: ${task.dueDate}</span></div>` : ''}
+                taskList.innerHTML = tasks.map(task => {
+                    const privacyTag = !task.shared ? ' 🔒' : '';
+                    const dueDate = task.dueDate ? `<div class="item-meta"><span class="item-due-date">Due: ${task.dueDate}</span></div>` : '';
+                    return `
+                        <div class="item">
+                            <input
+                                type="checkbox"
+                                ${task.completed ? 'checked' : ''}
+                                onchange="toggleTask(${task.id}, this.checked)"
+                                id="task-${task.id}"
+                            >
+                            <div class="item-content">
+                                <label for="task-${task.id}">${escapeHtml(task.name)}${privacyTag}</label>
+                                ${dueDate}
+                            </div>
+                            <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
                         </div>
-                        <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             }
 
             taskList.hidden = false;
@@ -410,8 +548,10 @@
         async function addTask() {
             const nameInput = document.getElementById('task-name');
             const dueInput = document.getElementById('task-due');
+            const sharedCheckbox = document.getElementById('task-shared');
             const name = nameInput.value.trim();
             const dueDate = dueInput.value;
+            const shared = sharedCheckbox.checked;
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -422,12 +562,13 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared }),
                 });
 
                 if (response.ok) {
                     nameInput.value = '';
                     dueInput.value = '';
+                    sharedCheckbox.checked = true;
                     await loadTasks();
                 } else {
                     showError('tasks', 'Failed to add task');
@@ -481,7 +622,7 @@
 
         async function loadShopping() {
             try {
-                const response = await fetch('/api/shopping');
+                const response = await fetch(`/api/shopping?user=${encodeURIComponent(currentUser)}`);
                 const data = await response.json();
                 shoppingItems = data;
                 shoppingLoaded = true;
@@ -503,21 +644,24 @@
             if (filtered.length === 0) {
                 shoppingList.innerHTML = `<div class="empty-state">No ${activeShoppingCategory.toLowerCase()} items yet.</div>`;
             } else {
-                shoppingList.innerHTML = filtered.map(item => `
-                    <div class="item">
-                        <input
-                            type="checkbox"
-                            ${item.purchased ? 'checked' : ''}
-                            onchange="toggleShoppingItem(${item.id}, this.checked)"
-                            id="shopping-${item.id}"
-                        >
-                        <div class="item-content">
-                            <label for="shopping-${item.id}">${escapeHtml(item.name)}</label>
-                            <div class="item-meta"><span class="item-category">${item.category}</span></div>
+                shoppingList.innerHTML = filtered.map(item => {
+                    const privacyTag = !item.shared ? ' 🔒' : '';
+                    return `
+                        <div class="item">
+                            <input
+                                type="checkbox"
+                                ${item.purchased ? 'checked' : ''}
+                                onchange="toggleShoppingItem(${item.id}, this.checked)"
+                                id="shopping-${item.id}"
+                            >
+                            <div class="item-content">
+                                <label for="shopping-${item.id}">${escapeHtml(item.name)}${privacyTag}</label>
+                                <div class="item-meta"><span class="item-category">${item.category}</span></div>
+                            </div>
+                            <button class="delete-btn" onclick="deleteShoppingItem(${item.id})">Delete</button>
                         </div>
-                        <button class="delete-btn" onclick="deleteShoppingItem(${item.id})">Delete</button>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             }
 
             shoppingList.hidden = false;
@@ -527,8 +671,10 @@
 
         async function addShoppingItem() {
             const nameInput = document.getElementById('shopping-item-name');
+            const sharedCheckbox = document.getElementById('shopping-shared');
             const name = nameInput.value.trim();
             const category = activeShoppingCategory;
+            const shared = sharedCheckbox.checked;
 
             if (!name) {
                 showError('shopping', 'Please enter an item name');
@@ -539,11 +685,12 @@
                 const response = await fetch('/api/shopping', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, category }),
+                    body: JSON.stringify({ name, category, owner: currentUser, shared }),
                 });
 
                 if (response.ok) {
                     nameInput.value = '';
+                    sharedCheckbox.checked = true;
                     await loadShopping();
                 } else {
                     showError('shopping', 'Failed to add item');
@@ -597,7 +744,7 @@
 
         async function loadNotes() {
             try {
-                const response = await fetch('/api/notes');
+                const response = await fetch(`/api/notes?user=${encodeURIComponent(currentUser)}`);
                 const data = await response.json();
                 notes = data;
                 notesLoaded = true;
@@ -619,10 +766,11 @@
                 notesList.innerHTML = notes.map(note => {
                     const date = new Date(note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const privacyTag = !note.shared ? ' 🔒' : '';
                     return `
                         <div class="item">
                             <div class="item-content">
-                                <label>${escapeHtml(note.content)}</label>
+                                <label>${escapeHtml(note.content)}${privacyTag}</label>
                                 <div class="item-meta item-date-created">${formatted}</div>
                             </div>
                             <button class="delete-btn" onclick="deleteNote(${note.id})">Delete</button>
@@ -638,7 +786,9 @@
 
         async function addNote() {
             const contentInput = document.getElementById('note-content');
+            const sharedCheckbox = document.getElementById('note-shared');
             const content = contentInput.value.trim();
+            const shared = sharedCheckbox.checked;
 
             if (!content) {
                 showError('notes', 'Please write a note');
@@ -649,11 +799,12 @@
                 const response = await fetch('/api/notes', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content }),
+                    body: JSON.stringify({ content, owner: currentUser, shared }),
                 });
 
                 if (response.ok) {
                     contentInput.value = '';
+                    sharedCheckbox.checked = true;
                     await loadNotes();
                 } else {
                     showError('notes', 'Failed to add note');
@@ -722,18 +873,11 @@
         // Notes form
         document.getElementById('note-add-btn').addEventListener('click', addNote);
         document.getElementById('note-content').addEventListener('keypress', (e) => {
-            if (e.key === 'Ctrl+Enter' || e.key === 'Meta+Enter') addNote();
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
         });
 
-        // Utility: Escape HTML to prevent XSS
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
         // ===== INIT =====
-        loadTasks();
+        initializeUI();
     </script>
 </body>
 </html>
