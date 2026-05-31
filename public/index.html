@@ -253,14 +253,18 @@
             cursor: pointer;
         }
 
-        /* Project filter bar */
+        /* Project filter bar — hidden by default; JS adds .visible when on Tasks or Shopping */
         .project-filter-bar {
-            display: flex;
+            display: none;
             gap: 8px;
             overflow-x: auto;
             padding-bottom: 8px;
             margin-bottom: 16px;
             -webkit-overflow-scrolling: touch;
+        }
+
+        .project-filter-bar.visible {
+            display: flex;
         }
 
         .project-pill {
@@ -659,6 +663,31 @@
             border-style: solid;
         }
 
+        /* Delete-checked button — red sibling of the blue add-toggle-btn */
+        .delete-checked-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 10px 16px;
+            background: #fff5f5;
+            border: 1.5px dashed #fca5a5;
+            border-radius: 8px;
+            color: #dc2626;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .delete-checked-btn:hover {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
     </style>
 </head>
 <body>
@@ -682,14 +711,15 @@
                 <button class="tab" data-section="projects">📁 Projects</button>
             </nav>
 
-            <!-- Project Filter Bar (shown on Tasks & Shopping) -->
-            <div id="project-filter-bar" class="project-filter-bar" hidden></div>
+            <!-- Project Filter Bar (shown on Tasks & Shopping only) -->
+            <div id="project-filter-bar" class="project-filter-bar"></div>
 
             <!-- TASKS SECTION -->
             <section id="section-tasks" class="section active">
                 <div id="tasks-error" class="error"></div>
                 <div id="tasks-loading" class="loading">Loading tasks...</div>
                 <div id="tasks-list" class="item-list" hidden></div>
+                <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden>🗑  Delete checked</button>
                 <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
             </section>
 
@@ -703,6 +733,7 @@
                 <div id="shopping-error" class="error"></div>
                 <div id="shopping-loading" class="loading">Loading shopping items...</div>
                 <div id="shopping-list" class="item-list" hidden></div>
+                <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden>🗑  Delete checked</button>
                 <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')">＋  Add Item</button>
             </section>
 
@@ -788,8 +819,8 @@
                 document.getElementById('main-app').classList.add('active');
 
                 // Default section is Tasks, so show the project filter bar.
-                document.getElementById('project-filter-bar').hidden =
-                    !(activeSection === 'tasks' || activeSection === 'shopping');
+                const _fb = document.getElementById('project-filter-bar');
+                _fb.classList.toggle('visible', activeSection === 'tasks' || activeSection === 'shopping');
 
                 // Load projects first (needed for the filter bar, dropdowns,
                 // and project tags on tasks), then tasks.
@@ -827,7 +858,7 @@
 
             // The project filter bar only applies to Tasks & Shopping.
             const filterBar = document.getElementById('project-filter-bar');
-            filterBar.hidden = !(sectionName === 'tasks' || sectionName === 'shopping');
+            filterBar.classList.toggle('visible', sectionName === 'tasks' || sectionName === 'shopping');
 
             // Lazy load Shopping, Notes, Projects
             if (sectionName === 'shopping' && !shoppingLoaded) {
@@ -894,22 +925,19 @@
                 });
 
                 taskList.innerHTML = sorted.map(task => {
-                    const privacyTag = !task.shared ? ' 🔒' : '';
+                    const recurIcon  = task.recurring ? ' 🔁' : '';
+                    const privacyTag = !task.shared   ? ' 🔒' : '';
                     const completedClass = task.completed ? ' completed' : '';
 
-                    const metaParts = [];
-                    const projTag = projectTag(task.project);
-                    if (projTag) metaParts.push(projTag);
-                    if (task.recurring) {
-                        const unit = task.frequency == 1 ? task.rate.replace(/s$/, '') : task.rate;
-                        metaParts.push(`<span class="item-recur">🔁 every ${task.frequency} ${unit}</span>`);
-                        const overdue = task.nextDue && task.nextDue < today ? ' overdue' : '';
-                        if (task.nextDue) metaParts.push(`<span class="item-due-date${overdue}">Next: ${task.nextDue}</span>`);
-                    } else if (task.dueDate) {
+                    // Due date line — recurring uses nextDue, one-off uses dueDate
+                    let dateLine = '';
+                    if (task.recurring && task.nextDue) {
+                        const overdue = task.nextDue < today ? ' overdue' : '';
+                        dateLine = `<div class="item-meta"><span class="item-due-date${overdue}">${task.nextDue}</span></div>`;
+                    } else if (!task.recurring && task.dueDate) {
                         const overdue = task.dueDate < today ? ' overdue' : '';
-                        metaParts.push(`<span class="item-due-date${overdue}">Due: ${task.dueDate}</span>`);
+                        dateLine = `<div class="item-meta"><span class="item-due-date${overdue}">${task.dueDate}</span></div>`;
                     }
-                    const meta = metaParts.length ? `<div class="item-meta">${metaParts.join('')}</div>` : '';
 
                     return `
                         <div class="item${completedClass}">
@@ -920,8 +948,8 @@
                                 id="task-${task.id}"
                             >
                             <div class="item-content">
-                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${escapeHtml(task.name)}${privacyTag}</button>
-                                ${meta}
+                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${escapeHtml(task.name)}${recurIcon}${privacyTag}</button>
+                                ${dateLine}
                             </div>
                         </div>
                     `;
@@ -930,6 +958,9 @@
 
             taskList.hidden = false;
             loading.hidden = true;
+            // Show delete-checked button only when there are completed tasks in the current view
+            const visibleCompleted = tasks.filter(t => matchesProjectFilter(t) && t.completed);
+            document.getElementById('tasks-delete-checked-btn').hidden = visibleCompleted.length === 0;
         }
 
         async function addTask() {
@@ -1096,6 +1127,11 @@
 
             shoppingList.hidden = false;
             loading.hidden = true;
+            // Show delete-checked button only when there are purchased items in the current view
+            const visiblePurchased = shoppingItems.filter(i =>
+                i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
+            );
+            document.getElementById('shopping-delete-checked-btn').hidden = visiblePurchased.length === 0;
         }
 
         async function addShoppingItem() {
@@ -1178,6 +1214,42 @@
             } catch (error) {
                 showError('shopping', 'Error deleting item');
                 console.error('Error:', error);
+            }
+        }
+
+        async function deleteCheckedTasks() {
+            const done = tasks.filter(t => matchesProjectFilter(t) && t.completed);
+            if (done.length === 0) return;
+            if (!confirm(`Delete ${done.length} completed task${done.length !== 1 ? 's' : ''}?`)) return;
+            try {
+                await Promise.all(done.map(t => fetch('/api/tasks', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: t.id }),
+                })));
+                await loadTasks();
+            } catch (error) {
+                showError('tasks', 'Failed to delete some tasks');
+                console.error(error);
+            }
+        }
+
+        async function deleteCheckedShoppingItems() {
+            const done = shoppingItems.filter(i =>
+                i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
+            );
+            if (done.length === 0) return;
+            if (!confirm(`Delete ${done.length} purchased item${done.length !== 1 ? 's' : ''}?`)) return;
+            try {
+                await Promise.all(done.map(i => fetch('/api/shopping', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: i.id }),
+                })));
+                await loadShopping();
+            } catch (error) {
+                showError('shopping', 'Failed to delete some items');
+                console.error(error);
             }
         }
 
@@ -1303,9 +1375,12 @@
         }
 
         // Does an item pass the active project filter?
+        // When a specific project is active, unassigned items (no project) are hidden —
+        // they only appear under "All".
         function matchesProjectFilter(item) {
             if (activeProjectFilter === 'all') return true;
-            return String(item.project || '') === String(activeProjectFilter);
+            const proj = String(item.project || '').trim();
+            return proj !== '' && proj === String(activeProjectFilter);
         }
 
         async function loadProjects() {
