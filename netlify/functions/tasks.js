@@ -46,7 +46,7 @@ const rowIsRecurring = (row) => {
 // Columns the Tasks sheet must have. Recurrence added the last four.
 const REQUIRED_HEADERS = [
   'Task ID', 'Task Name', 'Completed', 'Due Date', 'Owner', 'Shared',
-  'Frequency', 'Rate', 'Last Done', 'Next Due',
+  'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project',
 ];
 
 // Make sure every required column exists in the header row, appending any
@@ -117,6 +117,7 @@ exports.handler = async (event, context) => {
         rate: row.get('Rate') || '',
         lastDone: row.get('Last Done') || '',
         nextDue: row.get('Next Due') || '',
+        project: row.get('Project') || '',
       }));
 
       return {
@@ -128,7 +129,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new task
-      const { name, dueDate, owner, shared, recurring, frequency, rate } = JSON.parse(event.body);
+      const { name, dueDate, owner, shared, recurring, frequency, rate, project } = JSON.parse(event.body);
 
       if (!name) {
         return {
@@ -163,6 +164,7 @@ exports.handler = async (event, context) => {
         'Rate': isRecurring ? recurRate : '',
         'Last Done': lastDone,
         'Next Due': nextDue,
+        'Project': project || '',
       });
 
       return {
@@ -179,6 +181,7 @@ exports.handler = async (event, context) => {
           rate: isRecurring ? recurRate : '',
           lastDone,
           nextDue,
+          project: project || '',
         }),
         headers: { 'Content-Type': 'application/json' },
       };

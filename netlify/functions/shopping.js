@@ -1,6 +1,23 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 
+// Columns the Shopping sheet must have ('Project' added for the Projects feature).
+const REQUIRED_HEADERS = [
+  'Item ID', 'Item Name', 'Category', 'Purchased', 'Owner', 'Shared', 'Project',
+];
+
+// Append any missing required columns to the header row (preserves existing
+// columns/data). Lets new columns work without manually editing the sheet.
+// Call BEFORE getRows() so row objects map the new columns correctly.
+const ensureHeaders = async (sheet) => {
+  await sheet.loadHeaderRow();
+  const existing = sheet.headerValues || [];
+  const missing = REQUIRED_HEADERS.filter(h => !existing.includes(h));
+  if (missing.length > 0) {
+    await sheet.setHeaderRow([...existing, ...missing]);
+  }
+};
+
 // Initialize the Google Sheet
 const initializeSheet = async () => {
   const credentialsJson = process.env.GOOGLE_CREDENTIALS;
@@ -51,6 +68,7 @@ exports.handler = async (event, context) => {
         purchased: row.get('Purchased') === 'TRUE' || row.get('Purchased') === true,
         owner: row.get('Owner') || '',
         shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
+        project: row.get('Project') || '',
       }));
 
       return {
@@ -62,7 +80,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new shopping item
-      const { name, category, owner, shared } = JSON.parse(event.body);
+      const { name, category, owner, shared, project } = JSON.parse(event.body);
 
       if (!name || !category) {
         return {
@@ -73,6 +91,7 @@ exports.handler = async (event, context) => {
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Shopping'];
+      await ensureHeaders(sheet);
       const rows = await sheet.getRows();
 
       const maxId = Math.max(...rows.map(r => parseInt(r.get('Item ID')) || 0), 0);
@@ -85,11 +104,12 @@ exports.handler = async (event, context) => {
         'Purchased': 'FALSE',
         'Owner': owner || '',
         'Shared': shared ? 'TRUE' : 'FALSE',
+        'Project': project || '',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, category, purchased: false, owner, shared }),
+        body: JSON.stringify({ id: newId, name, category, purchased: false, owner, shared, project: project || '' }),
         headers: { 'Content-Type': 'application/json' },
       };
     }

@@ -240,6 +240,62 @@
             cursor: pointer;
         }
 
+        .project-select {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
+        /* Project filter bar */
+        .project-filter-bar {
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            margin-bottom: 16px;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .project-pill {
+            flex-shrink: 0;
+            padding: 6px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 999px;
+            background: #fff;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
+
+        .project-pill:hover {
+            border-color: #2563eb;
+            color: #2563eb;
+        }
+
+        .project-pill.active {
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
+        }
+
+        /* Project tag on items */
+        .item-project {
+            display: inline-block;
+            background: #eef2ff;
+            color: #4338ca;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-right: 8px;
+        }
+
         .item-date-created {
             font-size: 11px;
             color: #999;
@@ -376,7 +432,11 @@
                 <button class="tab active" data-section="tasks">📋 Tasks</button>
                 <button class="tab" data-section="shopping">🛒 Shopping</button>
                 <button class="tab" data-section="notes">📝 Notes</button>
+                <button class="tab" data-section="projects">📁 Projects</button>
             </nav>
+
+            <!-- Project Filter Bar (shown on Tasks & Shopping) -->
+            <div id="project-filter-bar" class="project-filter-bar" hidden></div>
 
             <!-- TASKS SECTION -->
             <section id="section-tasks" class="section active">
@@ -398,6 +458,11 @@
                             <option value="days">days</option>
                             <option value="weeks">weeks</option>
                             <option value="months">months</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <select id="task-project" class="project-select">
+                            <option value="">No project</option>
                         </select>
                     </div>
                     <div class="privacy-toggle">
@@ -428,6 +493,11 @@
                         <input type="text" id="shopping-item-name" placeholder="Add item..." autocomplete="off">
                         <button type="submit" class="add-btn" id="shopping-add-btn">Add</button>
                     </div>
+                    <div class="form-row">
+                        <select id="shopping-project" class="project-select">
+                            <option value="">No project</option>
+                        </select>
+                    </div>
                     <div class="privacy-toggle">
                         <input type="checkbox" id="shopping-private">
                         <label for="shopping-private">Private</label>
@@ -450,6 +520,24 @@
                     <button type="submit" class="add-btn" id="note-add-btn">Add Note</button>
                 </div>
             </section>
+
+            <!-- PROJECTS SECTION -->
+            <section id="section-projects" class="section">
+                <div id="projects-error" class="error"></div>
+                <div id="projects-loading" class="loading">Loading projects...</div>
+                <div id="projects-list" class="item-list" hidden></div>
+
+                <div class="add-form" id="projects-form" hidden>
+                    <div class="form-row">
+                        <input type="text" id="project-name" placeholder="New project name..." autocomplete="off">
+                        <button type="submit" class="add-btn" id="project-add-btn">Add</button>
+                    </div>
+                    <div class="privacy-toggle">
+                        <input type="checkbox" id="project-private">
+                        <label for="project-private">Private</label>
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -459,10 +547,13 @@
         let tasks = [];
         let shoppingItems = [];
         let notes = [];
+        let projects = [];
         let activeSection = 'tasks';
         let activeShoppingCategory = 'Grocery';
+        let activeProjectFilter = 'all'; // 'all' or a project id; persists across Tasks/Shopping
         let shoppingLoaded = false;
         let notesLoaded = false;
+        let projectsLoaded = false;
 
         // ===== USER SELECTION =====
 
@@ -476,8 +567,13 @@
                 document.getElementById('user-select-screen').style.display = 'none';
                 document.getElementById('main-app').classList.add('active');
 
-                // Load initial data
-                loadTasks();
+                // Default section is Tasks, so show the project filter bar.
+                document.getElementById('project-filter-bar').hidden =
+                    !(activeSection === 'tasks' || activeSection === 'shopping');
+
+                // Load projects first (needed for the filter bar, dropdowns,
+                // and project tags on tasks), then tasks.
+                loadProjects().then(loadTasks);
             }
         }
 
@@ -509,11 +605,17 @@
 
             activeSection = sectionName;
 
-            // Lazy load Shopping and Notes
+            // The project filter bar only applies to Tasks & Shopping.
+            const filterBar = document.getElementById('project-filter-bar');
+            filterBar.hidden = !(sectionName === 'tasks' || sectionName === 'shopping');
+
+            // Lazy load Shopping, Notes, Projects
             if (sectionName === 'shopping' && !shoppingLoaded) {
                 loadShopping();
             } else if (sectionName === 'notes' && !notesLoaded) {
                 loadNotes();
+            } else if (sectionName === 'projects' && !projectsLoaded) {
+                loadProjects();
             }
         }
 
@@ -548,15 +650,21 @@
             const loading = document.getElementById('tasks-loading');
             const form = document.getElementById('tasks-form');
 
-            if (tasks.length === 0) {
-                taskList.innerHTML = '<div class="empty-state">No tasks yet. Add one to get started!</div>';
+            // Apply the active project filter.
+            const visible = tasks.filter(matchesProjectFilter);
+
+            if (visible.length === 0) {
+                const msg = tasks.length === 0
+                    ? 'No tasks yet. Add one to get started!'
+                    : 'No tasks in this project.';
+                taskList.innerHTML = `<div class="empty-state">${msg}</div>`;
             } else {
                 const today = todayStr();
                 // Effective date: recurring tasks use Next Due, one-offs use Due Date.
                 const effDate = t => t.recurring ? t.nextDue : t.dueDate;
 
                 // Sort: incomplete first; within that, soonest due first (no date last).
-                const sorted = [...tasks].sort((a, b) => {
+                const sorted = [...visible].sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
                     const da = effDate(a), db = effDate(b);
                     if (!da && !db) return 0;
@@ -568,17 +676,19 @@
                 taskList.innerHTML = sorted.map(task => {
                     const privacyTag = !task.shared ? ' 🔒' : '';
 
-                    let meta = '';
+                    const metaParts = [];
+                    const projTag = projectTag(task.project);
+                    if (projTag) metaParts.push(projTag);
                     if (task.recurring) {
                         const unit = task.frequency == 1 ? task.rate.replace(/s$/, '') : task.rate;
-                        const recurTag = `<span class="item-recur">🔁 every ${task.frequency} ${unit}</span>`;
+                        metaParts.push(`<span class="item-recur">🔁 every ${task.frequency} ${unit}</span>`);
                         const overdue = task.nextDue && task.nextDue < today ? ' overdue' : '';
-                        const nextTag = task.nextDue ? `<span class="item-due-date${overdue}">Next: ${task.nextDue}</span>` : '';
-                        meta = `<div class="item-meta">${recurTag}${nextTag}</div>`;
+                        if (task.nextDue) metaParts.push(`<span class="item-due-date${overdue}">Next: ${task.nextDue}</span>`);
                     } else if (task.dueDate) {
                         const overdue = task.dueDate < today ? ' overdue' : '';
-                        meta = `<div class="item-meta"><span class="item-due-date${overdue}">Due: ${task.dueDate}</span></div>`;
+                        metaParts.push(`<span class="item-due-date${overdue}">Due: ${task.dueDate}</span>`);
                     }
+                    const meta = metaParts.length ? `<div class="item-meta">${metaParts.join('')}</div>` : '';
 
                     return `
                         <div class="item">
@@ -610,8 +720,10 @@
             const recurringCheckbox = document.getElementById('task-recurring');
             const frequencyInput = document.getElementById('task-frequency');
             const rateInput = document.getElementById('task-rate');
+            const projectInput = document.getElementById('task-project');
             const name = nameInput.value.trim();
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
+            const project = projectInput.value;
 
             const recurring = recurringCheckbox.checked;
             const frequency = recurring ? (parseInt(frequencyInput.value, 10) || 1) : '';
@@ -628,13 +740,14 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project }),
                 });
 
                 if (response.ok) {
                     nameInput.value = '';
                     dueInput.value = '';
                     privateCheckbox.checked = false;
+                    projectInput.value = '';
                     // Reset recurrence inputs back to defaults (one-off task).
                     recurringCheckbox.checked = false;
                     frequencyInput.value = '1';
@@ -724,11 +837,14 @@
             const loading = document.getElementById('shopping-loading');
             const form = document.getElementById('shopping-form');
 
-            // Filter by active category
-            let filtered = shoppingItems.filter(item => item.category === activeShoppingCategory);
+            // Filter by active category and active project filter
+            let filtered = shoppingItems.filter(item =>
+                item.category === activeShoppingCategory && matchesProjectFilter(item)
+            );
 
             if (filtered.length === 0) {
-                shoppingList.innerHTML = `<div class="empty-state">No ${activeShoppingCategory.toLowerCase()} items yet.</div>`;
+                const inProject = activeProjectFilter !== 'all';
+                shoppingList.innerHTML = `<div class="empty-state">No ${activeShoppingCategory.toLowerCase()} items${inProject ? ' in this project' : ' yet'}.</div>`;
             } else {
                 // Sort: incomplete first, purchased at bottom
                 filtered = filtered.sort((a, b) => {
@@ -738,6 +854,8 @@
 
                 shoppingList.innerHTML = filtered.map(item => {
                     const privacyTag = !item.shared ? ' 🔒' : '';
+                    const projTag = projectTag(item.project);
+                    const meta = projTag ? `<div class="item-meta">${projTag}</div>` : '';
                     return `
                         <div class="item">
                             <input
@@ -748,6 +866,7 @@
                             >
                             <div class="item-content">
                                 <label for="shopping-${item.id}">${escapeHtml(item.name)}${privacyTag}</label>
+                                ${meta}
                             </div>
                             <button class="delete-btn" onclick="deleteShoppingItem(${item.id})">Delete</button>
                         </div>
@@ -763,9 +882,11 @@
         async function addShoppingItem() {
             const nameInput = document.getElementById('shopping-item-name');
             const privateCheckbox = document.getElementById('shopping-private');
+            const projectInput = document.getElementById('shopping-project');
             const name = nameInput.value.trim();
             const category = activeShoppingCategory;
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
+            const project = projectInput.value;
 
             if (!name) {
                 showError('shopping', 'Please enter an item name');
@@ -776,12 +897,13 @@
                 const response = await fetch('/api/shopping', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, category, owner: currentUser, shared }),
+                    body: JSON.stringify({ name, category, owner: currentUser, shared, project }),
                 });
 
                 if (response.ok) {
                     nameInput.value = '';
                     privateCheckbox.checked = false;
+                    projectInput.value = '';
                     await loadShopping();
                 } else {
                     showError('shopping', 'Failed to add item');
@@ -938,6 +1060,182 @@
             }
         }
 
+        // ===== PROJECTS =====
+
+        // Look up a project's name by id (returns '' if unknown/not visible).
+        function projectName(id) {
+            if (!id) return '';
+            const p = projects.find(p => p.id == id);
+            return p ? p.name : '';
+        }
+
+        // HTML for a project tag, or '' if the item has no (visible) project.
+        function projectTag(id) {
+            const name = projectName(id);
+            return name ? `<span class="item-project">📁 ${escapeHtml(name)}</span>` : '';
+        }
+
+        // Does an item pass the active project filter?
+        function matchesProjectFilter(item) {
+            if (activeProjectFilter === 'all') return true;
+            return String(item.project || '') === String(activeProjectFilter);
+        }
+
+        async function loadProjects() {
+            try {
+                const response = await fetch(`/api/projects?user=${encodeURIComponent(currentUser)}`);
+                const data = await response.json();
+                projects = data;
+                projectsLoaded = true;
+                // If the active filter points to a project that no longer exists, reset it.
+                if (activeProjectFilter !== 'all' && !projects.some(p => p.id == activeProjectFilter)) {
+                    activeProjectFilter = 'all';
+                }
+                renderProjectFilter();
+                populateProjectDropdowns();
+                renderProjects();
+            } catch (error) {
+                showError('projects', 'Failed to load projects');
+                console.error('Error loading projects:', error);
+            }
+        }
+
+        // Render the top filter bar (All + one pill per project).
+        function renderProjectFilter() {
+            const bar = document.getElementById('project-filter-bar');
+            const pills = [{ id: 'all', name: 'All' }, ...projects];
+            bar.innerHTML = pills.map(p => {
+                const active = String(activeProjectFilter) === String(p.id) ? ' active' : '';
+                const label = p.id === 'all' ? 'All' : escapeHtml(p.name);
+                return `<button class="project-pill${active}" onclick="setProjectFilter('${p.id}')">${label}</button>`;
+            }).join('');
+        }
+
+        function setProjectFilter(id) {
+            activeProjectFilter = id;
+            renderProjectFilter();
+            // Re-render whichever list is showing.
+            if (activeSection === 'tasks') renderTasks();
+            else if (activeSection === 'shopping') renderShopping();
+        }
+
+        // Fill the project <select> dropdowns in the add-forms.
+        function populateProjectDropdowns() {
+            const options = '<option value="">No project</option>' +
+                projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+            ['task-project', 'shopping-project'].forEach(selId => {
+                const sel = document.getElementById(selId);
+                if (!sel) return;
+                const prev = sel.value;
+                sel.innerHTML = options;
+                // Preserve a selection if it still exists.
+                if (projects.some(p => String(p.id) === prev)) sel.value = prev;
+            });
+        }
+
+        function renderProjects() {
+            const list = document.getElementById('projects-list');
+            const loading = document.getElementById('projects-loading');
+            const form = document.getElementById('projects-form');
+
+            if (projects.length === 0) {
+                list.innerHTML = '<div class="empty-state">No projects yet. Add one to group your tasks and shopping.</div>';
+            } else {
+                list.innerHTML = projects.map(project => {
+                    const privacyTag = !project.shared ? ' 🔒' : '';
+                    return `
+                        <div class="item">
+                            <div class="item-content">
+                                <label>📁 ${escapeHtml(project.name)}${privacyTag}</label>
+                            </div>
+                            <button class="delete-btn" onclick="deleteProject(${project.id})">Delete</button>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            list.hidden = false;
+            loading.hidden = true;
+            form.hidden = false;
+        }
+
+        async function addProject() {
+            const nameInput = document.getElementById('project-name');
+            const privateCheckbox = document.getElementById('project-private');
+            const name = nameInput.value.trim();
+            const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
+
+            if (!name) {
+                showError('projects', 'Please enter a project name');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/projects', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, owner: currentUser, shared }),
+                });
+
+                if (response.ok) {
+                    nameInput.value = '';
+                    privateCheckbox.checked = false;
+                    await loadProjects();
+                } else {
+                    showError('projects', 'Failed to add project');
+                }
+            } catch (error) {
+                showError('projects', 'Error adding project');
+                console.error('Error:', error);
+            }
+        }
+
+        async function deleteProject(id) {
+            // Count tagged items currently loaded so we can warn the user.
+            const taggedTasks = tasks.filter(t => String(t.project || '') === String(id)).length;
+            const taggedShopping = shoppingLoaded
+                ? shoppingItems.filter(i => String(i.project || '') === String(id)).length
+                : 0;
+            const total = taggedTasks + taggedShopping;
+
+            let deleteItems = false;
+            if (total > 0) {
+                // OK = delete the tagged items too; Cancel = keep them (unassign).
+                const countNote = shoppingLoaded
+                    ? `${taggedTasks} task(s) and ${taggedShopping} shopping item(s)`
+                    : `${taggedTasks} task(s) (shopping not checked)`;
+                deleteItems = confirm(
+                    `This project has ${countNote}.\n\n` +
+                    `OK = delete the project AND those items.\n` +
+                    `Cancel = keep the items (they'll just lose the project tag).`
+                );
+                // Second confirm to make sure they really want to leave the project.
+                if (!deleteItems && !confirm('Delete the project and keep its items (unassigned)?')) return;
+            } else {
+                if (!confirm('Delete this project?')) return;
+            }
+
+            try {
+                const response = await fetch('/api/projects', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, deleteItems }),
+                });
+
+                if (response.ok) {
+                    await loadProjects();
+                    // Item lists may have changed (deleted or unassigned) — refresh.
+                    await loadTasks();
+                    if (shoppingLoaded) await loadShopping();
+                } else {
+                    showError('projects', 'Failed to delete project');
+                }
+            } catch (error) {
+                showError('projects', 'Error deleting project');
+                console.error('Error:', error);
+            }
+        }
+
         // ===== EVENT HANDLERS =====
 
         // Tab navigation
@@ -983,6 +1281,12 @@
         document.getElementById('note-add-btn').addEventListener('click', addNote);
         document.getElementById('note-content').addEventListener('keypress', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') addNote();
+        });
+
+        // Projects form
+        document.getElementById('project-add-btn').addEventListener('click', addProject);
+        document.getElementById('project-name').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') addProject();
         });
 
         // ===== INIT =====
