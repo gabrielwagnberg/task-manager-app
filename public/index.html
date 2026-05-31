@@ -97,33 +97,35 @@
             border-bottom-color: #2563eb;
         }
 
-        /* Sub-tab Navigation (Shopping) */
+        /* Sub-tab Navigation (Shopping) — pill style, matches project filter bar */
         .sub-tab-nav {
             display: flex;
             gap: 8px;
             margin-bottom: 16px;
-            border-bottom: 1px solid #e0e0e0;
-            padding-bottom: 8px;
         }
 
         .sub-tab {
-            padding: 8px 12px;
-            background: none;
-            border: none;
+            padding: 6px 14px;
+            border: 1px solid #e0e0e0;
+            border-radius: 999px;
+            background: #fff;
             font-size: 13px;
-            cursor: pointer;
             color: #666;
-            border-bottom: 2px solid transparent;
-            transition: all 0.3s ease;
+            cursor: pointer;
+            font-family: inherit;
+            white-space: nowrap;
+            transition: all 0.2s;
         }
 
         .sub-tab:hover {
-            color: #333;
+            border-color: #2563eb;
+            color: #2563eb;
         }
 
         .sub-tab.active {
-            color: #2563eb;
-            border-bottom-color: #2563eb;
+            background: #2563eb;
+            border-color: #2563eb;
+            color: #fff;
         }
 
         /* Sections */
@@ -616,6 +618,47 @@
             font-size: 14px;
         }
 
+        /* App title */
+        .app-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #111;
+            letter-spacing: -0.3px;
+            margin-bottom: 20px;
+        }
+
+        /* Collapsible add-form toggle button */
+        .add-toggle-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 10px 16px;
+            background: #f5f7ff;
+            border: 1.5px dashed #c7d2fe;
+            border-radius: 8px;
+            color: #4338ca;
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: all 0.2s;
+        }
+
+        .add-toggle-btn:hover {
+            background: #eef2ff;
+            border-color: #818cf8;
+        }
+
+        .add-toggle-btn.open {
+            background: #f9fafb;
+            border-color: #e0e0e0;
+            color: #999;
+            border-style: solid;
+        }
+
     </style>
 </head>
 <body>
@@ -629,6 +672,8 @@
 
         <!-- Main App (hidden until user selected) -->
         <div id="main-app" class="main-app">
+            <h1 class="app-title">Task Manager</h1>
+
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
                 <button class="tab active" data-section="tasks">📋 Tasks</button>
@@ -645,6 +690,7 @@
                 <div id="tasks-error" class="error"></div>
                 <div id="tasks-loading" class="loading">Loading tasks...</div>
                 <div id="tasks-list" class="item-list" hidden></div>
+                <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="toggleForm('tasks')">＋  Add Task</button>
 
                 <div class="add-form" id="tasks-form" hidden>
                     <div class="form-row">
@@ -689,6 +735,7 @@
                 <div id="shopping-error" class="error"></div>
                 <div id="shopping-loading" class="loading">Loading shopping items...</div>
                 <div id="shopping-list" class="item-list" hidden></div>
+                <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="toggleForm('shopping')">＋  Add Item</button>
 
                 <div class="add-form" id="shopping-form" hidden>
                     <div class="form-row">
@@ -712,9 +759,15 @@
                 <div id="notes-error" class="error"></div>
                 <div id="notes-loading" class="loading">Loading notes...</div>
                 <div id="notes-list" class="item-list" hidden></div>
+                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="toggleForm('notes')">＋  Add Note</button>
 
                 <div class="add-form" id="notes-form" hidden>
                     <textarea id="note-content" placeholder="Write a note..."></textarea>
+                    <div class="form-row">
+                        <select id="note-project" class="project-select">
+                            <option value="">No project</option>
+                        </select>
+                    </div>
                     <div class="privacy-toggle">
                         <input type="checkbox" id="note-private">
                         <label for="note-private">Private</label>
@@ -728,6 +781,7 @@
                 <div id="projects-error" class="error"></div>
                 <div id="projects-loading" class="loading">Loading projects...</div>
                 <div id="projects-list" class="item-list" hidden></div>
+                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="toggleForm('projects')">＋  Add Project</button>
 
                 <div class="add-form" id="projects-form" hidden>
                     <div class="form-row">
@@ -940,7 +994,6 @@
 
             taskList.hidden = false;
             loading.hidden = true;
-            form.hidden = false;
         }
 
         async function addTask() {
@@ -984,6 +1037,7 @@
                     rateInput.value = 'days';
                     document.getElementById('recur-fields').hidden = true;
                     document.getElementById('task-due-row').hidden = false;
+                    toggleForm('tasks', false);
                     await loadTasks();
                 } else {
                     showError('tasks', 'Failed to add task');
@@ -1106,7 +1160,6 @@
 
             shoppingList.hidden = false;
             loading.hidden = true;
-            form.hidden = false;
         }
 
         async function addShoppingItem() {
@@ -1134,6 +1187,7 @@
                     nameInput.value = '';
                     privateCheckbox.checked = false;
                     projectInput.value = '';
+                    toggleForm('shopping', false);
                     await loadShopping();
                 } else {
                     showError('shopping', 'Failed to add item');
@@ -1221,12 +1275,15 @@
                     const date = new Date(note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const privacyTag = !note.shared ? ' 🔒' : '';
+                    const projTag = projectTag(note.project);
+                    const meta = projTag ? `<div class="item-meta">${projTag}</div>` : '';
                     // Truncate long notes in the list view
                     const preview = note.content.length > 120 ? note.content.slice(0, 120) + '…' : note.content;
                     return `
                         <div class="item">
                             <div class="item-content">
                                 <button class="item-name-btn" onclick="openModal('note', ${note.id})" style="font-size:14px;line-height:1.4">${escapeHtml(preview)}${privacyTag}</button>
+                                ${meta}
                                 <div class="item-meta item-date-created">${formatted}</div>
                             </div>
                         </div>
@@ -1236,14 +1293,15 @@
 
             notesList.hidden = false;
             loading.hidden = true;
-            form.hidden = false;
         }
 
         async function addNote() {
             const contentInput = document.getElementById('note-content');
             const privateCheckbox = document.getElementById('note-private');
+            const projectInput = document.getElementById('note-project');
             const content = contentInput.value.trim();
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
+            const project = projectInput.value;
 
             if (!content) {
                 showError('notes', 'Please write a note');
@@ -1254,12 +1312,14 @@
                 const response = await fetch('/api/notes', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ content, owner: currentUser, shared }),
+                    body: JSON.stringify({ content, owner: currentUser, shared, project }),
                 });
 
                 if (response.ok) {
                     contentInput.value = '';
                     privateCheckbox.checked = false;
+                    projectInput.value = '';
+                    toggleForm('notes', false);
                     await loadNotes();
                 } else {
                     showError('notes', 'Failed to add note');
@@ -1354,7 +1414,7 @@
         function populateProjectDropdowns() {
             const options = '<option value="">No project</option>' +
                 projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
-            ['task-project', 'shopping-project'].forEach(selId => {
+            ['task-project', 'shopping-project', 'note-project'].forEach(selId => {
                 const sel = document.getElementById(selId);
                 if (!sel) return;
                 const prev = sel.value;
@@ -1377,9 +1437,8 @@
                     return `
                         <div class="item">
                             <div class="item-content">
-                                <label>📁 ${escapeHtml(project.name)}${privacyTag}</label>
+                                <button class="item-name-btn" onclick="openModal('project', ${project.id})">📁 ${escapeHtml(project.name)}${privacyTag}</button>
                             </div>
-                            <button class="delete-btn" onclick="deleteProject(${project.id})">Delete</button>
                         </div>
                     `;
                 }).join('');
@@ -1387,7 +1446,6 @@
 
             list.hidden = false;
             loading.hidden = true;
-            form.hidden = false;
         }
 
         async function addProject() {
@@ -1411,6 +1469,7 @@
                 if (response.ok) {
                     nameInput.value = '';
                     privateCheckbox.checked = false;
+                    toggleForm('projects', false);
                     await loadProjects();
                 } else {
                     showError('projects', 'Failed to add project');
@@ -1467,6 +1526,24 @@
             }
         }
 
+        // ===== COLLAPSIBLE FORMS =====
+
+        const formLabels = {
+            tasks: 'Add Task',
+            shopping: 'Add Item',
+            notes: 'Add Note',
+            projects: 'Add Project',
+        };
+
+        function toggleForm(section, forceOpen) {
+            const form = document.getElementById(`${section}-form`);
+            const btn  = document.getElementById(`${section}-toggle-btn`);
+            const open = forceOpen !== undefined ? forceOpen : form.hidden;
+            form.hidden = !open;
+            btn.classList.toggle('open', open);
+            btn.textContent = open ? `✕  ${formLabels[section]}` : `＋  ${formLabels[section]}`;
+        }
+
         // ===== DETAIL / EDIT MODAL =====
 
         // Currently open item: { type, data }
@@ -1478,6 +1555,7 @@
             if (type === 'task')     data = tasks.find(t => t.id == id);
             if (type === 'shopping') data = shoppingItems.find(i => i.id == id);
             if (type === 'note')     data = notes.find(n => n.id == id);
+            if (type === 'project')  data = projects.find(p => p.id == id);
             if (!data) return;
 
             modalItem = { type, data };
@@ -1510,7 +1588,7 @@
         function renderDetailView() {
             const { type, data } = modalItem;
             document.getElementById('modal-title').textContent =
-                type === 'task' ? 'Task' : type === 'shopping' ? 'Shopping item' : 'Note';
+                type === 'task' ? 'Task' : type === 'shopping' ? 'Shopping item' : type === 'note' ? 'Note' : 'Project';
 
             const rows = [];
 
@@ -1533,9 +1611,15 @@
                 rows.push(['Project', projectName(data.project) || '—']);
                 rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
                 rows.push(['Owner', data.owner]);
-            } else {
+            } else if (type === 'note') {
                 rows.push(['Note', escapeHtml(data.content)]);
                 rows.push(['Created', new Date(data.dateCreated).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })]);
+                rows.push(['Project', projectName(data.project) || '—']);
+                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Owner', data.owner]);
+            } else {
+                // project
+                rows.push(['Name', escapeHtml(data.name)]);
                 rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
                 rows.push(['Owner', data.owner]);
             }
@@ -1625,11 +1709,31 @@
                         </label>
                     </div>
                 `;
-            } else {
+            } else if (type === 'note') {
+                const projOptions = '<option value="">No project</option>' +
+                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
                 form.innerHTML = `
                     <div class="modal-field">
                         <div class="modal-field-label">Note</div>
                         <textarea id="edit-content">${escapeHtml(data.content)}</textarea>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="edit-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-private" ${!data.shared ? 'checked' : ''}>
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else {
+                // project
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="edit-name" value="${escapeHtml(data.name)}">
                     </div>
                     <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -1680,16 +1784,28 @@
                 };
                 url = '/api/shopping';
                 successReload = loadShopping;
-            } else {
+            } else if (type === 'note') {
                 const content = document.getElementById('edit-content').value.trim();
                 if (!content) { alert('Note cannot be empty'); return; }
                 body = {
                     id: data.id,
                     content,
                     shared: !document.getElementById('edit-private').checked,
+                    project: document.getElementById('edit-project').value,
                 };
                 url = '/api/notes';
                 successReload = loadNotes;
+            } else {
+                // project
+                const name = document.getElementById('edit-name').value.trim();
+                if (!name) { alert('Name is required'); return; }
+                body = {
+                    id: data.id,
+                    name,
+                    shared: !document.getElementById('edit-private').checked,
+                };
+                url = '/api/projects';
+                successReload = loadProjects;
             }
 
             try {
@@ -1715,6 +1831,14 @@
 
         async function modalDelete() {
             const { type, data } = modalItem;
+
+            // Projects have their own delete flow (tagged-items prompt).
+            if (type === 'project') {
+                closeModal();
+                await deleteProject(data.id);
+                return;
+            }
+
             const label = type === 'note' ? 'note' : type === 'shopping' ? 'item' : 'task';
             if (!confirm(`Delete this ${label}?`)) return;
 

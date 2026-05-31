@@ -50,6 +50,7 @@ exports.handler = async (event, context) => {
         dateCreated: row.get('Date Created'),
         owner: row.get('Owner') || '',
         shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
+        project: row.get('Project') || '',
       }));
 
       return {
@@ -61,7 +62,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new note
-      const { content, owner, shared } = JSON.parse(event.body);
+      const { content, owner, shared, project } = JSON.parse(event.body);
 
       if (!content) {
         return {
@@ -86,18 +87,19 @@ exports.handler = async (event, context) => {
         'Date Created': now,
         'Owner': owner || '',
         'Shared': shared ? 'TRUE' : 'FALSE',
+        'Project': project || '',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, content, dateCreated: now, owner, shared }),
+        body: JSON.stringify({ id: newId, content, dateCreated: now, owner, shared, project: project || '' }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'PUT') {
       // Update a note (content and/or shared)
-      const { id, content, shared } = JSON.parse(event.body);
+      const { id, content, shared, project } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Notes'];
@@ -114,6 +116,7 @@ exports.handler = async (event, context) => {
 
       if (content !== undefined) row.set('Note', content);
       if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+      if (project !== undefined) row.set('Project', project || '');
       await row.save();
 
       return {
@@ -124,6 +127,7 @@ exports.handler = async (event, context) => {
           dateCreated: row.get('Date Created'),
           owner: row.get('Owner') || '',
           shared: row.get('Shared') === 'TRUE',
+          project: row.get('Project') || '',
         }),
         headers: { 'Content-Type': 'application/json' },
       };
