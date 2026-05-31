@@ -188,8 +188,8 @@ exports.handler = async (event, context) => {
     }
 
     if (method === 'PUT') {
-      // Update a task (toggle completed)
-      const { id, completed } = JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      const { id } = body;
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByIndex[0];
@@ -204,6 +204,59 @@ exports.handler = async (event, context) => {
           body: JSON.stringify({ error: 'Task not found' }),
         };
       }
+
+      // ── Full edit (name present in body) ──────────────────────────────────
+      if (typeof body.name !== 'undefined') {
+        const { name, dueDate, shared, recurring, frequency, rate, project } = body;
+
+        if (name !== undefined) row.set('Task Name', name);
+        if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        if (project !== undefined) row.set('Project', project || '');
+
+        const isRecurring = !!recurring && !!frequency;
+        if (isRecurring) {
+          const recurRate = rate || 'days';
+          // Keep existing Last Done; recalculate Next Due from it (or today).
+          const lastDone = row.get('Last Done') || todayStr();
+          const nextDue = computeNextDue(lastDone, frequency, recurRate);
+          row.set('Frequency', frequency);
+          row.set('Rate', recurRate);
+          row.set('Last Done', lastDone);
+          row.set('Next Due', nextDue);
+          row.set('Due Date', '');
+        } else {
+          // Switching to one-off or updating due date
+          row.set('Frequency', '');
+          row.set('Rate', '');
+          row.set('Last Done', '');
+          row.set('Next Due', '');
+          row.set('Due Date', dueDate || '');
+        }
+
+        await row.save();
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            id,
+            name: row.get('Task Name'),
+            completed: row.get('Completed') === 'TRUE',
+            dueDate: row.get('Due Date') || '',
+            owner: row.get('Owner') || '',
+            shared: row.get('Shared') === 'TRUE',
+            recurring: isRecurring,
+            frequency: row.get('Frequency') || '',
+            rate: row.get('Rate') || '',
+            lastDone: row.get('Last Done') || '',
+            nextDue: row.get('Next Due') || '',
+            project: row.get('Project') || '',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        };
+      }
+
+      // ── Toggle completed ──────────────────────────────────────────────────
+      const { completed } = body;
 
       // Recurring task checked off: don't complete it — reset the cycle.
       // Last Done = today, Next Due recalculated, stays incomplete.

@@ -95,6 +95,40 @@ exports.handler = async (event, context) => {
       };
     }
 
+    if (method === 'PUT') {
+      // Update a note (content and/or shared)
+      const { id, content, shared } = JSON.parse(event.body);
+
+      const doc = await initializeSheet();
+      const sheet = doc.sheetsByTitle['Notes'];
+      const rows = await sheet.getRows();
+
+      const row = rows.find(r => r.get('Note ID') == id);
+
+      if (!row) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ error: 'Note not found' }),
+        };
+      }
+
+      if (content !== undefined) row.set('Note', content);
+      if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+      await row.save();
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          id,
+          content: row.get('Note'),
+          dateCreated: row.get('Date Created'),
+          owner: row.get('Owner') || '',
+          shared: row.get('Shared') === 'TRUE',
+        }),
+        headers: { 'Content-Type': 'application/json' },
+      };
+    }
+
     if (method === 'DELETE') {
       // Delete a note
       const { id } = JSON.parse(event.body);

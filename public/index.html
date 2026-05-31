@@ -301,6 +301,208 @@
             color: #999;
         }
 
+        /* Tappable item name */
+        .item-name-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+            font-size: 16px;
+            color: #333;
+            cursor: pointer;
+            text-align: left;
+            font-family: inherit;
+            line-height: 1.3;
+        }
+
+        .item-name-btn:hover {
+            color: #2563eb;
+        }
+
+        .completed .item-name-btn {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        /* Detail / Edit Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 100;
+            align-items: flex-end;
+            justify-content: center;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 16px 16px 0 0;
+            padding: 24px 20px 32px;
+            width: 100%;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.22s ease;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(40px); opacity: 0; }
+            to   { transform: translateY(0);    opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 17px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 22px;
+            cursor: pointer;
+            color: #999;
+            padding: 4px;
+            line-height: 1;
+        }
+
+        .modal-close:hover { color: #333; }
+
+        /* Detail view (read-only) */
+        .detail-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .detail-row {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .detail-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            min-width: 80px;
+            padding-top: 3px;
+        }
+
+        .detail-value {
+            font-size: 15px;
+            color: #333;
+            flex: 1;
+        }
+
+        /* Edit form inside modal */
+        .modal-edit-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .modal-field-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 4px;
+        }
+
+        .modal-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-field input[type="text"],
+        .modal-field input[type="date"],
+        .modal-field input[type="number"],
+        .modal-field select,
+        .modal-field textarea {
+            padding: 10px 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            font-family: inherit;
+            background: white;
+        }
+
+        .modal-field textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .modal-recur-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .modal-recur-row input[type="number"] {
+            width: 70px;
+        }
+
+        .modal-recur-row select {
+            flex: 1;
+        }
+
+        /* Modal action buttons */
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.2s;
+        }
+
+        .modal-btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .modal-btn-primary:hover { background: #1d4ed8; }
+
+        .modal-btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .modal-btn-secondary:hover { background: #e0e0e0; }
+
+        .modal-btn-danger {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .modal-btn-danger:hover { background: #fecaca; }
+
         .delete-btn {
             padding: 6px 12px;
             background: #dc2626;
@@ -541,6 +743,34 @@
         </div>
     </div>
 
+    <!-- Detail / Edit Modal (shared across all item types) -->
+    <div id="modal-overlay" class="modal-overlay" onclick="handleModalOverlayClick(event)">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-title">Details</span>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+
+            <!-- Detail view -->
+            <div id="modal-detail">
+                <div class="detail-rows" id="modal-detail-rows"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="switchToEditMode()">Edit</button>
+                    <button class="modal-btn modal-btn-danger" id="modal-delete-btn" onclick="modalDelete()">Delete</button>
+                </div>
+            </div>
+
+            <!-- Edit view -->
+            <div id="modal-edit" hidden>
+                <div class="modal-edit-form" id="modal-edit-form"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="switchToDetailMode()">Cancel</button>
+                    <button class="modal-btn modal-btn-primary" onclick="saveEdit()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ===== STATE =====
         let currentUser = localStorage.getItem('currentUser');
@@ -675,6 +905,7 @@
 
                 taskList.innerHTML = sorted.map(task => {
                     const privacyTag = !task.shared ? ' 🔒' : '';
+                    const completedClass = task.completed ? ' completed' : '';
 
                     const metaParts = [];
                     const projTag = projectTag(task.project);
@@ -691,7 +922,7 @@
                     const meta = metaParts.length ? `<div class="item-meta">${metaParts.join('')}</div>` : '';
 
                     return `
-                        <div class="item">
+                        <div class="item${completedClass}">
                             <input
                                 type="checkbox"
                                 ${task.completed ? 'checked' : ''}
@@ -699,10 +930,9 @@
                                 id="task-${task.id}"
                             >
                             <div class="item-content">
-                                <label for="task-${task.id}">${escapeHtml(task.name)}${privacyTag}</label>
+                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${escapeHtml(task.name)}${privacyTag}</button>
                                 ${meta}
                             </div>
-                            <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
                         </div>
                     `;
                 }).join('');
@@ -854,10 +1084,11 @@
 
                 shoppingList.innerHTML = filtered.map(item => {
                     const privacyTag = !item.shared ? ' 🔒' : '';
+                    const completedClass = item.purchased ? ' completed' : '';
                     const projTag = projectTag(item.project);
                     const meta = projTag ? `<div class="item-meta">${projTag}</div>` : '';
                     return `
-                        <div class="item">
+                        <div class="item${completedClass}">
                             <input
                                 type="checkbox"
                                 ${item.purchased ? 'checked' : ''}
@@ -865,10 +1096,9 @@
                                 id="shopping-${item.id}"
                             >
                             <div class="item-content">
-                                <label for="shopping-${item.id}">${escapeHtml(item.name)}${privacyTag}</label>
+                                <button class="item-name-btn" onclick="openModal('shopping', ${item.id})">${escapeHtml(item.name)}${privacyTag}</button>
                                 ${meta}
                             </div>
-                            <button class="delete-btn" onclick="deleteShoppingItem(${item.id})">Delete</button>
                         </div>
                     `;
                 }).join('');
@@ -991,13 +1221,14 @@
                     const date = new Date(note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const privacyTag = !note.shared ? ' 🔒' : '';
+                    // Truncate long notes in the list view
+                    const preview = note.content.length > 120 ? note.content.slice(0, 120) + '…' : note.content;
                     return `
                         <div class="item">
                             <div class="item-content">
-                                <label>${escapeHtml(note.content)}${privacyTag}</label>
+                                <button class="item-name-btn" onclick="openModal('note', ${note.id})" style="font-size:14px;line-height:1.4">${escapeHtml(preview)}${privacyTag}</button>
                                 <div class="item-meta item-date-created">${formatted}</div>
                             </div>
-                            <button class="delete-btn" onclick="deleteNote(${note.id})">Delete</button>
                         </div>
                     `;
                 }).join('');
@@ -1232,6 +1463,280 @@
                 }
             } catch (error) {
                 showError('projects', 'Error deleting project');
+                console.error('Error:', error);
+            }
+        }
+
+        // ===== DETAIL / EDIT MODAL =====
+
+        // Currently open item: { type, data }
+        // type: 'task' | 'shopping' | 'note'
+        let modalItem = null;
+
+        function openModal(type, id) {
+            let data;
+            if (type === 'task')     data = tasks.find(t => t.id == id);
+            if (type === 'shopping') data = shoppingItems.find(i => i.id == id);
+            if (type === 'note')     data = notes.find(n => n.id == id);
+            if (!data) return;
+
+            modalItem = { type, data };
+            renderDetailView();
+            document.getElementById('modal-overlay').classList.add('open');
+        }
+
+        function closeModal() {
+            document.getElementById('modal-overlay').classList.remove('open');
+            modalItem = null;
+        }
+
+        function handleModalOverlayClick(e) {
+            if (e.target === document.getElementById('modal-overlay')) closeModal();
+        }
+
+        function switchToEditMode() {
+            renderEditForm();
+            document.getElementById('modal-detail').hidden = true;
+            document.getElementById('modal-edit').hidden = false;
+        }
+
+        function switchToDetailMode() {
+            document.getElementById('modal-detail').hidden = false;
+            document.getElementById('modal-edit').hidden = true;
+        }
+
+        // ── Detail view ───────────────────────────────────────────────────────
+
+        function renderDetailView() {
+            const { type, data } = modalItem;
+            document.getElementById('modal-title').textContent =
+                type === 'task' ? 'Task' : type === 'shopping' ? 'Shopping item' : 'Note';
+
+            const rows = [];
+
+            if (type === 'task') {
+                rows.push(['Name', escapeHtml(data.name)]);
+                if (data.recurring) {
+                    const unit = data.frequency == 1 ? data.rate.replace(/s$/, '') : data.rate;
+                    rows.push(['Repeat', `Every ${data.frequency} ${unit}`]);
+                    rows.push(['Next due', data.nextDue || '—']);
+                    rows.push(['Last done', data.lastDone || '—']);
+                } else {
+                    rows.push(['Due date', data.dueDate || '—']);
+                }
+                rows.push(['Project', projectName(data.project) || '—']);
+                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Owner', data.owner]);
+            } else if (type === 'shopping') {
+                rows.push(['Item', escapeHtml(data.name)]);
+                rows.push(['Category', data.category]);
+                rows.push(['Project', projectName(data.project) || '—']);
+                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Owner', data.owner]);
+            } else {
+                rows.push(['Note', escapeHtml(data.content)]);
+                rows.push(['Created', new Date(data.dateCreated).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })]);
+                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Owner', data.owner]);
+            }
+
+            document.getElementById('modal-detail-rows').innerHTML = rows.map(([label, value]) => `
+                <div class="detail-row">
+                    <span class="detail-label">${label}</span>
+                    <span class="detail-value">${value}</span>
+                </div>
+            `).join('');
+
+            document.getElementById('modal-detail').hidden = false;
+            document.getElementById('modal-edit').hidden = true;
+        }
+
+        // ── Edit form ─────────────────────────────────────────────────────────
+
+        function renderEditForm() {
+            const { type, data } = modalItem;
+            const form = document.getElementById('modal-edit-form');
+
+            if (type === 'task') {
+                const projOptions = '<option value="">No project</option>' +
+                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+                const isRecurring = !!data.recurring;
+
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="edit-name" value="${escapeHtml(data.name)}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="edit-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Due date <span id="edit-due-label-note" style="font-weight:400;text-transform:none">(ignored if recurring)</span></div>
+                        <input type="date" id="edit-due" value="${data.dueDate || ''}">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-recurring" ${isRecurring ? 'checked' : ''} onchange="toggleEditRecurring()">
+                            <span class="modal-field-label" style="margin:0">Recurring</span>
+                        </label>
+                    </div>
+                    <div class="modal-field" id="edit-recur-fields" ${isRecurring ? '' : 'hidden'}>
+                        <div class="modal-field-label">Repeat every</div>
+                        <div class="modal-recur-row">
+                            <input type="number" id="edit-frequency" min="1" value="${data.frequency || 1}">
+                            <select id="edit-rate">
+                                <option value="days" ${(data.rate||'days')==='days'?'selected':''}>days</option>
+                                <option value="weeks" ${data.rate==='weeks'?'selected':''}>weeks</option>
+                                <option value="months" ${data.rate==='months'?'selected':''}>months</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-private" ${!data.shared ? 'checked' : ''}>
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else if (type === 'shopping') {
+                const projOptions = '<option value="">No project</option>' +
+                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="edit-name" value="${escapeHtml(data.name)}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Category</div>
+                        <select id="edit-category">
+                            <option value="Grocery" ${data.category==='Grocery'?'selected':''}>Grocery</option>
+                            <option value="Investment" ${data.category==='Investment'?'selected':''}>Investment</option>
+                        </select>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="edit-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-private" ${!data.shared ? 'checked' : ''}>
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else {
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Note</div>
+                        <textarea id="edit-content">${escapeHtml(data.content)}</textarea>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-private" ${!data.shared ? 'checked' : ''}>
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            }
+        }
+
+        function toggleEditRecurring() {
+            const on = document.getElementById('edit-recurring').checked;
+            document.getElementById('edit-recur-fields').hidden = !on;
+        }
+
+        // ── Save ──────────────────────────────────────────────────────────────
+
+        async function saveEdit() {
+            const { type, data } = modalItem;
+            let body, url, successReload;
+
+            if (type === 'task') {
+                const name = document.getElementById('edit-name').value.trim();
+                if (!name) { alert('Name is required'); return; }
+                const recurring = document.getElementById('edit-recurring').checked;
+                body = {
+                    id: data.id,
+                    name,
+                    dueDate: document.getElementById('edit-due').value,
+                    shared: !document.getElementById('edit-private').checked,
+                    project: document.getElementById('edit-project').value,
+                    recurring,
+                    frequency: recurring ? (parseInt(document.getElementById('edit-frequency').value, 10) || 1) : '',
+                    rate: recurring ? document.getElementById('edit-rate').value : '',
+                };
+                url = '/api/tasks';
+                successReload = loadTasks;
+            } else if (type === 'shopping') {
+                const name = document.getElementById('edit-name').value.trim();
+                if (!name) { alert('Name is required'); return; }
+                body = {
+                    id: data.id,
+                    name,
+                    category: document.getElementById('edit-category').value,
+                    shared: !document.getElementById('edit-private').checked,
+                    project: document.getElementById('edit-project').value,
+                };
+                url = '/api/shopping';
+                successReload = loadShopping;
+            } else {
+                const content = document.getElementById('edit-content').value.trim();
+                if (!content) { alert('Note cannot be empty'); return; }
+                body = {
+                    id: data.id,
+                    content,
+                    shared: !document.getElementById('edit-private').checked,
+                };
+                url = '/api/notes';
+                successReload = loadNotes;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+
+                if (response.ok) {
+                    closeModal();
+                    await successReload();
+                } else {
+                    alert('Failed to save changes. Please try again.');
+                }
+            } catch (error) {
+                alert('Error saving changes. Please try again.');
+                console.error('Error:', error);
+            }
+        }
+
+        // ── Delete from modal ─────────────────────────────────────────────────
+
+        async function modalDelete() {
+            const { type, data } = modalItem;
+            const label = type === 'note' ? 'note' : type === 'shopping' ? 'item' : 'task';
+            if (!confirm(`Delete this ${label}?`)) return;
+
+            try {
+                const url = type === 'task' ? '/api/tasks' :
+                            type === 'shopping' ? '/api/shopping' : '/api/notes';
+                const response = await fetch(url, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: data.id }),
+                });
+
+                if (response.ok) {
+                    closeModal();
+                    if (type === 'task') await loadTasks();
+                    else if (type === 'shopping') await loadShopping();
+                    else await loadNotes();
+                } else {
+                    alert('Failed to delete. Please try again.');
+                }
+            } catch (error) {
+                alert('Error deleting. Please try again.');
                 console.error('Error:', error);
             }
         }

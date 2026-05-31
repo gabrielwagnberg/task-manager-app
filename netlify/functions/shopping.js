@@ -115,11 +115,12 @@ exports.handler = async (event, context) => {
     }
 
     if (method === 'PUT') {
-      // Update an item (toggle purchased)
-      const { id, purchased } = JSON.parse(event.body);
+      const body = JSON.parse(event.body);
+      const { id } = body;
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Shopping'];
+      await ensureHeaders(sheet);
       const rows = await sheet.getRows();
 
       const row = rows.find(r => r.get('Item ID') == id);
@@ -131,6 +132,32 @@ exports.handler = async (event, context) => {
         };
       }
 
+      // ── Full edit (name present in body) ──────────────────────────────────
+      if (typeof body.name !== 'undefined') {
+        const { name, category, shared, project } = body;
+        if (name !== undefined) row.set('Item Name', name);
+        if (category !== undefined) row.set('Category', category);
+        if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        if (project !== undefined) row.set('Project', project || '');
+        await row.save();
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            id,
+            name: row.get('Item Name'),
+            category: row.get('Category'),
+            purchased: row.get('Purchased') === 'TRUE',
+            owner: row.get('Owner') || '',
+            shared: row.get('Shared') === 'TRUE',
+            project: row.get('Project') || '',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        };
+      }
+
+      // ── Toggle purchased ──────────────────────────────────────────────────
+      const { purchased } = body;
       row.set('Purchased', purchased ? 'TRUE' : 'FALSE');
       await row.save();
 
