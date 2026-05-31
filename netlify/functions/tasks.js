@@ -259,12 +259,19 @@ exports.handler = async (event, context) => {
       const { completed } = body;
 
       // Recurring task checked off: don't complete it — reset the cycle.
-      // Last Done = today, Next Due recalculated, stays incomplete.
+      // Last Done = today, Next Due = (today + 1 day) + interval.
+      // Using tomorrow as the base guarantees the task stays hidden for at
+      // least today + interval days, covering server/client timezone drift
+      // and matching the user expectation that a just-done task won't
+      // resurface until the next full cycle has elapsed.
       if (rowIsRecurring(row) && completed) {
         const today = todayStr();
         const rate = row.get('Rate') || 'days';
         const frequency = row.get('Frequency');
-        const nextDue = computeNextDue(today, frequency, rate);
+        // Base from tomorrow so nextDue = tomorrow + interval (not today + interval).
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const nextDue = computeNextDue(toDateStr(tomorrow), frequency, rate);
 
         row.set('Last Done', today);
         row.set('Next Due', nextDue);

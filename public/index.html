@@ -743,9 +743,9 @@
             <section id="section-tasks" class="section">
                 <div id="tasks-error" class="error"></div>
                 <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
-                <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden>🗑  Delete Checked</button>
                 <div id="tasks-loading" class="loading">Loading tasks...</div>
                 <div id="tasks-list" class="item-list" hidden></div>
+                <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden>🗑  Delete Checked</button>
             </section>
 
             <!-- SHOPPING SECTION -->
@@ -757,9 +757,9 @@
 
                 <div id="shopping-error" class="error"></div>
                 <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')">＋  Add Item</button>
-                <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden>🗑  Delete Checked</button>
                 <div id="shopping-loading" class="loading">Loading shopping items...</div>
                 <div id="shopping-list" class="item-list" hidden></div>
+                <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden>🗑  Delete Checked</button>
             </section>
 
             <!-- NOTES SECTION -->
@@ -1116,9 +1116,17 @@
         async function toggleTask(id, completed) {
             const task = tasks.find(t => t.id == id);
 
-            // Optimistic update: reflect the new state and re-render immediately
-            // so the item sorts to the bottom (or back up) right away.
-            if (task) task.completed = completed;
+            // Optimistic update: reflect the new state immediately.
+            // Recurring tasks being checked never stay "completed" — they reset.
+            // Set a far-future nextDue so the task vanishes from the list right
+            // away instead of briefly appearing at the bottom as a checked row.
+            if (task) {
+                if (task.recurring && completed) {
+                    task.nextDue = '9999-12-31';
+                } else {
+                    task.completed = completed;
+                }
+            }
             renderTasks();
 
             try {
