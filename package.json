@@ -5,9 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "netlify dev",
-    "build": "echo 'Building...'"
+    "build": "echo 'Build complete'"
   },
   "dependencies": {
-    "google-spreadsheet": "^4.1.1"
+    "google-spreadsheet": "^4.1.1",
+    "google-auth-library": "^8.8.0"
   }
 }
