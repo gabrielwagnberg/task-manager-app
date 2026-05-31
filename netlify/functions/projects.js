@@ -1,7 +1,7 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 
-const PROJECT_HEADERS = ['Project ID', 'Name', 'Owner', 'Shared'];
+const PROJECT_HEADERS = ['Project ID', 'Name', 'Owner', 'Shared', 'Description'];
 
 // Initialize the Google Sheet
 const initializeSheet = async () => {
@@ -101,6 +101,7 @@ exports.handler = async (event, context) => {
         name: row.get('Name'),
         owner: row.get('Owner') || '',
         shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
+        description: row.get('Description') || '',
       }));
 
       return {
@@ -112,7 +113,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new project
-      const { name, owner, shared } = JSON.parse(event.body);
+      const { name, owner, shared, description } = JSON.parse(event.body);
 
       if (!name) {
         return {
@@ -133,18 +134,19 @@ exports.handler = async (event, context) => {
         'Name': name,
         'Owner': owner || '',
         'Shared': shared ? 'TRUE' : 'FALSE',
+        'Description': description || '',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, owner, shared }),
+        body: JSON.stringify({ id: newId, name, owner, shared, description: description || '' }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'PUT') {
       // Update a project (rename and/or change shared)
-      const { id, name, shared } = JSON.parse(event.body);
+      const { id, name, shared, description } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
       const sheet = await getProjectsSheet(doc);
@@ -165,11 +167,19 @@ exports.handler = async (event, context) => {
       if (typeof shared === 'boolean') {
         row.set('Shared', shared ? 'TRUE' : 'FALSE');
       }
+      if (typeof description === 'string') {
+        row.set('Description', description);
+      }
       await row.save();
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ id, name: row.get('Name'), shared: row.get('Shared') === 'TRUE' }),
+        body: JSON.stringify({
+          id,
+          name: row.get('Name'),
+          shared: row.get('Shared') === 'TRUE',
+          description: row.get('Description') || '',
+        }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
