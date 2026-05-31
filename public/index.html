@@ -320,19 +320,6 @@
             font-size: 14px;
         }
 
-        .user-badge {
-            text-align: center;
-            padding: 12px;
-            background: #f0f0f0;
-            border-radius: 8px;
-            margin-bottom: 16px;
-            font-size: 14px;
-            color: #666;
-        }
-
-        .user-badge strong {
-            color: #333;
-        }
     </style>
 </head>
 <body>
@@ -341,16 +328,11 @@
         <div id="user-select-screen" class="user-select-screen">
             <h2>Who are you?</h2>
             <button onclick="selectUser('Gabriel')">Gabriel</button>
-            <button onclick="selectUser('Tompa')">Tompa</button>
+            <button onclick="selectUser('Thomas')">Thomas</button>
         </div>
 
         <!-- Main App (hidden until user selected) -->
         <div id="main-app" class="main-app">
-            <!-- User Badge -->
-            <div class="user-badge">
-                Logged in as: <strong id="user-display">-</strong>
-            </div>
-
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
                 <button class="tab active" data-section="tasks">📋 Tasks</button>
@@ -373,8 +355,8 @@
                         <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
                     </div>
                     <div class="privacy-toggle">
-                        <input type="checkbox" id="task-shared" checked>
-                        <label for="task-shared" id="task-shared-label">Shared with Tompa</label>
+                        <input type="checkbox" id="task-private">
+                        <label for="task-private">Private</label>
                     </div>
                 </div>
             </section>
@@ -396,8 +378,8 @@
                         <button type="submit" class="add-btn" id="shopping-add-btn">Add</button>
                     </div>
                     <div class="privacy-toggle">
-                        <input type="checkbox" id="shopping-shared" checked>
-                        <label for="shopping-shared" id="shopping-shared-label">Shared with Tompa</label>
+                        <input type="checkbox" id="shopping-private">
+                        <label for="shopping-private">Private</label>
                     </div>
                 </div>
             </section>
@@ -411,8 +393,8 @@
                 <div class="add-form" id="notes-form" hidden>
                     <textarea id="note-content" placeholder="Write a note..."></textarea>
                     <div class="privacy-toggle">
-                        <input type="checkbox" id="note-shared" checked>
-                        <label for="note-shared" id="note-shared-label">Shared with Tompa</label>
+                        <input type="checkbox" id="note-private">
+                        <label for="note-private">Private</label>
                     </div>
                     <button type="submit" class="add-btn" id="note-add-btn">Add Note</button>
                 </div>
@@ -442,13 +424,6 @@
                 // Show main app
                 document.getElementById('user-select-screen').style.display = 'none';
                 document.getElementById('main-app').classList.add('active');
-                document.getElementById('user-display').textContent = currentUser;
-
-                // Update shared labels
-                const otherUser = currentUser === 'Gabriel' ? 'Tompa' : 'Gabriel';
-                document.getElementById('task-shared-label').textContent = `Shared with ${otherUser}`;
-                document.getElementById('shopping-shared-label').textContent = `Shared with ${otherUser}`;
-                document.getElementById('note-shared-label').textContent = `Shared with ${otherUser}`;
 
                 // Load initial data
                 loadTasks();
@@ -519,7 +494,13 @@
             if (tasks.length === 0) {
                 taskList.innerHTML = '<div class="empty-state">No tasks yet. Add one to get started!</div>';
             } else {
-                taskList.innerHTML = tasks.map(task => {
+                // Sort: incomplete first, completed at bottom
+                const sorted = [...tasks].sort((a, b) => {
+                    if (a.completed === b.completed) return 0;
+                    return a.completed ? 1 : -1;
+                });
+
+                taskList.innerHTML = sorted.map(task => {
                     const privacyTag = !task.shared ? ' 🔒' : '';
                     const dueDate = task.dueDate ? `<div class="item-meta"><span class="item-due-date">Due: ${task.dueDate}</span></div>` : '';
                     return `
@@ -548,10 +529,10 @@
         async function addTask() {
             const nameInput = document.getElementById('task-name');
             const dueInput = document.getElementById('task-due');
-            const sharedCheckbox = document.getElementById('task-shared');
+            const privateCheckbox = document.getElementById('task-private');
             const name = nameInput.value.trim();
             const dueDate = dueInput.value;
-            const shared = sharedCheckbox.checked;
+            const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -568,7 +549,7 @@
                 if (response.ok) {
                     nameInput.value = '';
                     dueInput.value = '';
-                    sharedCheckbox.checked = true;
+                    privateCheckbox.checked = false;
                     await loadTasks();
                 } else {
                     showError('tasks', 'Failed to add task');
@@ -639,11 +620,17 @@
             const form = document.getElementById('shopping-form');
 
             // Filter by active category
-            const filtered = shoppingItems.filter(item => item.category === activeShoppingCategory);
+            let filtered = shoppingItems.filter(item => item.category === activeShoppingCategory);
 
             if (filtered.length === 0) {
                 shoppingList.innerHTML = `<div class="empty-state">No ${activeShoppingCategory.toLowerCase()} items yet.</div>`;
             } else {
+                // Sort: incomplete first, purchased at bottom
+                filtered = filtered.sort((a, b) => {
+                    if (a.purchased === b.purchased) return 0;
+                    return a.purchased ? 1 : -1;
+                });
+
                 shoppingList.innerHTML = filtered.map(item => {
                     const privacyTag = !item.shared ? ' 🔒' : '';
                     return `
@@ -656,7 +643,6 @@
                             >
                             <div class="item-content">
                                 <label for="shopping-${item.id}">${escapeHtml(item.name)}${privacyTag}</label>
-                                <div class="item-meta"><span class="item-category">${item.category}</span></div>
                             </div>
                             <button class="delete-btn" onclick="deleteShoppingItem(${item.id})">Delete</button>
                         </div>
@@ -671,10 +657,10 @@
 
         async function addShoppingItem() {
             const nameInput = document.getElementById('shopping-item-name');
-            const sharedCheckbox = document.getElementById('shopping-shared');
+            const privateCheckbox = document.getElementById('shopping-private');
             const name = nameInput.value.trim();
             const category = activeShoppingCategory;
-            const shared = sharedCheckbox.checked;
+            const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
 
             if (!name) {
                 showError('shopping', 'Please enter an item name');
@@ -690,7 +676,7 @@
 
                 if (response.ok) {
                     nameInput.value = '';
-                    sharedCheckbox.checked = true;
+                    privateCheckbox.checked = false;
                     await loadShopping();
                 } else {
                     showError('shopping', 'Failed to add item');
@@ -763,7 +749,10 @@
             if (notes.length === 0) {
                 notesList.innerHTML = '<div class="empty-state">No notes yet. Create one to get started!</div>';
             } else {
-                notesList.innerHTML = notes.map(note => {
+                // Sort by date created, newest first
+                const sorted = [...notes].sort((a, b) => new Date(b.dateCreated) - new Date(a.dateCreated));
+
+                notesList.innerHTML = sorted.map(note => {
                     const date = new Date(note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const privacyTag = !note.shared ? ' 🔒' : '';
@@ -786,9 +775,9 @@
 
         async function addNote() {
             const contentInput = document.getElementById('note-content');
-            const sharedCheckbox = document.getElementById('note-shared');
+            const privateCheckbox = document.getElementById('note-private');
             const content = contentInput.value.trim();
-            const shared = sharedCheckbox.checked;
+            const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
 
             if (!content) {
                 showError('notes', 'Please write a note');
@@ -804,7 +793,7 @@
 
                 if (response.ok) {
                     contentInput.value = '';
-                    sharedCheckbox.checked = true;
+                    privateCheckbox.checked = false;
                     await loadNotes();
                 } else {
                     showError('notes', 'Failed to add note');
