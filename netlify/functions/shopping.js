@@ -31,98 +31,98 @@ exports.handler = async (event, context) => {
 
   try {
     if (method === 'GET') {
-      // Get all tasks
+      // Get all shopping items
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Shopping'];
       const rows = await sheet.getRows();
 
-      const tasks = rows.map(row => ({
-        id: row.get('Task ID'),
-        name: row.get('Task Name'),
-        completed: row.get('Completed') === 'TRUE' || row.get('Completed') === true,
-        dueDate: row.get('Due Date') || '',
+      const items = rows.map(row => ({
+        id: row.get('Item ID'),
+        name: row.get('Item Name'),
+        category: row.get('Category'),
+        purchased: row.get('Purchased') === 'TRUE' || row.get('Purchased') === true,
       }));
 
       return {
         statusCode: 200,
-        body: JSON.stringify(tasks),
+        body: JSON.stringify(items),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'POST') {
-      // Add a new task
-      const { name, dueDate } = JSON.parse(event.body);
+      // Add a new shopping item
+      const { name, category } = JSON.parse(event.body);
 
-      if (!name) {
+      if (!name || !category) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Task name is required' }),
+          body: JSON.stringify({ error: 'Item name and category are required' }),
         };
       }
 
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Shopping'];
       const rows = await sheet.getRows();
 
-      const maxId = Math.max(...rows.map(r => parseInt(r.get('Task ID')) || 0), 0);
+      const maxId = Math.max(...rows.map(r => parseInt(r.get('Item ID')) || 0), 0);
       const newId = maxId + 1;
 
       await sheet.addRow({
-        'Task ID': newId,
-        'Task Name': name,
-        'Completed': 'FALSE',
-        'Due Date': dueDate || '',
+        'Item ID': newId,
+        'Item Name': name,
+        'Category': category,
+        'Purchased': 'FALSE',
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, completed: false, dueDate: dueDate || '' }),
+        body: JSON.stringify({ id: newId, name, category, purchased: false }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'PUT') {
-      // Update a task (toggle completed)
-      const { id, completed } = JSON.parse(event.body);
+      // Update an item (toggle purchased)
+      const { id, purchased } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Shopping'];
       const rows = await sheet.getRows();
 
-      const row = rows.find(r => r.get('Task ID') == id);
+      const row = rows.find(r => r.get('Item ID') == id);
 
       if (!row) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ error: 'Task not found' }),
+          body: JSON.stringify({ error: 'Item not found' }),
         };
       }
 
-      row.set('Completed', completed ? 'TRUE' : 'FALSE');
+      row.set('Purchased', purchased ? 'TRUE' : 'FALSE');
       await row.save();
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ id, completed }),
+        body: JSON.stringify({ id, purchased }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'DELETE') {
-      // Delete a task
+      // Delete an item
       const { id } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Shopping'];
       const rows = await sheet.getRows();
 
-      const row = rows.find(r => r.get('Task ID') == id);
+      const row = rows.find(r => r.get('Item ID') == id);
 
       if (!row) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ error: 'Task not found' }),
+          body: JSON.stringify({ error: 'Item not found' }),
         };
       }
 

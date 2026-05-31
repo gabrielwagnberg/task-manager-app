@@ -31,98 +31,72 @@ exports.handler = async (event, context) => {
 
   try {
     if (method === 'GET') {
-      // Get all tasks
+      // Get all notes
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Notes'];
       const rows = await sheet.getRows();
 
-      const tasks = rows.map(row => ({
-        id: row.get('Task ID'),
-        name: row.get('Task Name'),
-        completed: row.get('Completed') === 'TRUE' || row.get('Completed') === true,
-        dueDate: row.get('Due Date') || '',
+      const notes = rows.map(row => ({
+        id: row.get('Note ID'),
+        content: row.get('Note'),
+        dateCreated: row.get('Date Created'),
       }));
 
       return {
         statusCode: 200,
-        body: JSON.stringify(tasks),
+        body: JSON.stringify(notes),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'POST') {
-      // Add a new task
-      const { name, dueDate } = JSON.parse(event.body);
+      // Add a new note
+      const { content } = JSON.parse(event.body);
 
-      if (!name) {
+      if (!content) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Task name is required' }),
+          body: JSON.stringify({ error: 'Note content is required' }),
         };
       }
 
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Notes'];
       const rows = await sheet.getRows();
 
-      const maxId = Math.max(...rows.map(r => parseInt(r.get('Task ID')) || 0), 0);
+      const maxId = Math.max(...rows.map(r => parseInt(r.get('Note ID')) || 0), 0);
       const newId = maxId + 1;
 
+      // Create ISO date string
+      const now = new Date().toISOString();
+
       await sheet.addRow({
-        'Task ID': newId,
-        'Task Name': name,
-        'Completed': 'FALSE',
-        'Due Date': dueDate || '',
+        'Note ID': newId,
+        'Note': content,
+        'Date Created': now,
       });
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, name, completed: false, dueDate: dueDate || '' }),
-        headers: { 'Content-Type': 'application/json' },
-      };
-    }
-
-    if (method === 'PUT') {
-      // Update a task (toggle completed)
-      const { id, completed } = JSON.parse(event.body);
-
-      const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
-      const rows = await sheet.getRows();
-
-      const row = rows.find(r => r.get('Task ID') == id);
-
-      if (!row) {
-        return {
-          statusCode: 404,
-          body: JSON.stringify({ error: 'Task not found' }),
-        };
-      }
-
-      row.set('Completed', completed ? 'TRUE' : 'FALSE');
-      await row.save();
-
-      return {
-        statusCode: 200,
-        body: JSON.stringify({ id, completed }),
+        body: JSON.stringify({ id: newId, content, dateCreated: now }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'DELETE') {
-      // Delete a task
+      // Delete a note
       const { id } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
-      const sheet = doc.sheetsByIndex[0];
+      const sheet = doc.sheetsByTitle['Notes'];
       const rows = await sheet.getRows();
 
-      const row = rows.find(r => r.get('Task ID') == id);
+      const row = rows.find(r => r.get('Note ID') == id);
 
       if (!row) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ error: 'Task not found' }),
+          body: JSON.stringify({ error: 'Note not found' }),
         };
       }
 
