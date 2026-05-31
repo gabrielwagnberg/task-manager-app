@@ -77,11 +77,11 @@
 
         .tab {
             flex: 1;
-            padding: 12px;
+            padding: 10px 6px;
             background: none;
             border: none;
             border-bottom: 3px solid transparent;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 600;
             cursor: pointer;
             color: #666;
@@ -95,6 +95,23 @@
         .tab.active {
             color: #2563eb;
             border-bottom-color: #2563eb;
+        }
+
+        /* Red count badge on the Today tab */
+        .today-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #dc2626;
+            color: white;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            margin-left: 3px;
+            vertical-align: middle;
         }
 
         /* Sub-tab Navigation (Shopping) — pill style, matches project filter bar */
@@ -705,7 +722,8 @@
 
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
-                <button class="tab active" data-section="tasks">📋 Tasks</button>
+                <button class="tab active" data-section="today">📌 Today<span id="today-badge" class="today-badge" hidden></span></button>
+                <button class="tab" data-section="tasks">📋 Tasks</button>
                 <button class="tab" data-section="shopping">🛒 Shopping</button>
                 <button class="tab" data-section="notes">📝 Notes</button>
                 <button class="tab" data-section="projects">📁 Projects</button>
@@ -714,13 +732,20 @@
             <!-- Project Filter Bar (shown on Tasks & Shopping only) -->
             <div id="project-filter-bar" class="project-filter-bar"></div>
 
+            <!-- TODAY SECTION -->
+            <section id="section-today" class="section active">
+                <button class="add-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
+                <div id="today-loading" class="loading">Loading...</div>
+                <div id="today-list" class="item-list" hidden></div>
+            </section>
+
             <!-- TASKS SECTION -->
-            <section id="section-tasks" class="section active">
+            <section id="section-tasks" class="section">
                 <div id="tasks-error" class="error"></div>
-                <div id="tasks-loading" class="loading">Loading tasks...</div>
-                <div id="tasks-list" class="item-list" hidden></div>
                 <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
                 <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden>🗑  Delete Checked</button>
+                <div id="tasks-loading" class="loading">Loading tasks...</div>
+                <div id="tasks-list" class="item-list" hidden></div>
             </section>
 
             <!-- SHOPPING SECTION -->
@@ -731,26 +756,26 @@
                 </div>
 
                 <div id="shopping-error" class="error"></div>
-                <div id="shopping-loading" class="loading">Loading shopping items...</div>
-                <div id="shopping-list" class="item-list" hidden></div>
                 <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')">＋  Add Item</button>
                 <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden>🗑  Delete Checked</button>
+                <div id="shopping-loading" class="loading">Loading shopping items...</div>
+                <div id="shopping-list" class="item-list" hidden></div>
             </section>
 
             <!-- NOTES SECTION -->
             <section id="section-notes" class="section">
                 <div id="notes-error" class="error"></div>
+                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="openAddModal('notes')">＋  Add Note</button>
                 <div id="notes-loading" class="loading">Loading notes...</div>
                 <div id="notes-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="openAddModal('notes')">＋  Add Note</button>
             </section>
 
             <!-- PROJECTS SECTION -->
             <section id="section-projects" class="section">
                 <div id="projects-error" class="error"></div>
+                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="openAddModal('projects')">＋  Add Project</button>
                 <div id="projects-loading" class="loading">Loading projects...</div>
                 <div id="projects-list" class="item-list" hidden></div>
-                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="openAddModal('projects')">＋  Add Project</button>
             </section>
         </div>
     </div>
@@ -799,9 +824,10 @@
         let shoppingItems = [];
         let notes = [];
         let projects = [];
-        let activeSection = 'tasks';
+        let activeSection = 'today';
         let activeShoppingCategory = 'Grocery';
         let activeProjectFilter = 'all'; // 'all' or a project id; persists across Tasks/Shopping
+        let tasksLoaded = false;
         let shoppingLoaded = false;
         let notesLoaded = false;
         let projectsLoaded = false;
@@ -860,13 +886,15 @@
             const filterBar = document.getElementById('project-filter-bar');
             filterBar.classList.toggle('visible', sectionName === 'tasks' || sectionName === 'shopping');
 
-            // Lazy load Shopping, Notes, Projects
+            // Lazy load Shopping, Notes, Projects; re-render Today on tab switch
             if (sectionName === 'shopping' && !shoppingLoaded) {
                 loadShopping();
             } else if (sectionName === 'notes' && !notesLoaded) {
                 loadNotes();
             } else if (sectionName === 'projects' && !projectsLoaded) {
                 loadProjects();
+            } else if (sectionName === 'today' && tasksLoaded) {
+                renderToday();
             }
         }
 
@@ -889,6 +917,7 @@
                 const response = await fetch(`/api/tasks?user=${encodeURIComponent(currentUser)}`);
                 const data = await response.json();
                 tasks = data;
+                tasksLoaded = true;
                 renderTasks();
             } catch (error) {
                 showError('tasks', 'Failed to load tasks');
@@ -901,16 +930,26 @@
             const loading = document.getElementById('tasks-loading');
             const form = document.getElementById('tasks-form');
 
-            // Apply the active project filter.
-            const visible = tasks.filter(matchesProjectFilter);
+            // Apply filters: project + hide recurring tasks that aren't due yet.
+            const today = todayStr();
+            const visible = tasks.filter(t => {
+                if (!matchesProjectFilter(t)) return false;
+                // Recurring tasks are hidden until their next due date arrives.
+                if (t.recurring && t.nextDue && t.nextDue > today) return false;
+                return true;
+            });
 
             if (visible.length === 0) {
-                const msg = tasks.length === 0
-                    ? 'No tasks yet. Add one to get started!'
-                    : 'No tasks in this project.';
+                let msg;
+                if (tasks.length === 0) {
+                    msg = 'No tasks yet. Add one to get started!';
+                } else if (activeProjectFilter !== 'all') {
+                    msg = 'No tasks in this project.';
+                } else {
+                    msg = 'No tasks due right now.';
+                }
                 taskList.innerHTML = `<div class="empty-state">${msg}</div>`;
             } else {
-                const today = todayStr();
                 // Effective date: recurring tasks use Next Due, one-offs use Due Date.
                 const effDate = t => t.recurring ? t.nextDue : t.dueDate;
 
@@ -959,8 +998,67 @@
             taskList.hidden = false;
             loading.hidden = true;
             // Show delete-checked button only when there are completed tasks in the current view
-            const visibleCompleted = tasks.filter(t => matchesProjectFilter(t) && t.completed);
-            document.getElementById('tasks-delete-checked-btn').hidden = visibleCompleted.length === 0;
+            document.getElementById('tasks-delete-checked-btn').hidden = !visible.some(t => t.completed);
+
+            // Keep the Today view and its badge in sync whenever tasks change.
+            renderToday();
+        }
+
+        // ===== TODAY VIEW =====
+
+        function renderToday() {
+            const todayList = document.getElementById('today-list');
+            const loading   = document.getElementById('today-loading');
+            const today     = todayStr();
+
+            // Incomplete tasks whose effective date is today or earlier.
+            const urgent = tasks.filter(t => {
+                if (t.completed) return false;
+                const date = t.recurring ? t.nextDue : t.dueDate;
+                return date && date <= today;
+            });
+
+            // Most overdue first (earliest date first).
+            urgent.sort((a, b) => {
+                const da = a.recurring ? a.nextDue : a.dueDate;
+                const db = b.recurring ? b.nextDue : b.dueDate;
+                return da < db ? -1 : (da > db ? 1 : 0);
+            });
+
+            // Update the count badge on the Today tab.
+            const badge = document.getElementById('today-badge');
+            if (urgent.length > 0) {
+                badge.textContent = urgent.length;
+                badge.hidden = false;
+            } else {
+                badge.hidden = true;
+            }
+
+            if (urgent.length === 0) {
+                todayList.innerHTML = '<div class="empty-state">All caught up! 🎉</div>';
+            } else {
+                todayList.innerHTML = urgent.map(task => {
+                    const recurIcon  = task.recurring ? ' 🔁' : '';
+                    const privacyTag = !task.shared   ? ' 🔒' : '';
+                    const dateStr    = task.recurring  ? task.nextDue : task.dueDate;
+                    const overdue    = dateStr < today ? ' overdue' : '';
+                    const dateLabel  = dateStr === today ? 'Today' : dateStr;
+                    return `
+                        <div class="item">
+                            <input type="checkbox"
+                                onchange="toggleTask(${task.id}, this.checked)"
+                                id="today-task-${task.id}">
+                            <div class="item-content">
+                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${escapeHtml(task.name)}${recurIcon}${privacyTag}</button>
+                                <div class="item-meta"><span class="item-due-date${overdue}">${dateLabel}</span></div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            todayList.hidden = false;
+            loading.hidden   = true;
         }
 
         async function addTask() {
@@ -1215,7 +1313,12 @@
         }
 
         async function deleteCheckedTasks() {
-            const done = tasks.filter(t => matchesProjectFilter(t) && t.completed);
+            const today = todayStr();
+            const done = tasks.filter(t => {
+                if (!matchesProjectFilter(t)) return false;
+                if (t.recurring && t.nextDue && t.nextDue > today) return false;
+                return t.completed;
+            });
             if (done.length === 0) return;
             if (!confirm(`Delete ${done.length} completed task${done.length !== 1 ? 's' : ''}?`)) return;
             try {
