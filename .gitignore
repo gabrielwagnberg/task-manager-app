@@ -2,3 +2,6 @@ node_modules/
 .env
 .DS_Store
 .netlify/
+
+# Google service-account credentials — never commit (use Netlify GOOGLE_CREDENTIALS env var)
+task-manager-gabriel-*.json

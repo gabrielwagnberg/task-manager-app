@@ -203,6 +203,43 @@
             font-size: 12px;
         }
 
+        .item-recur {
+            display: inline-block;
+            color: #2563eb;
+            font-size: 12px;
+            margin-right: 8px;
+        }
+
+        .item-due-date.overdue {
+            color: #dc2626;
+        }
+
+        /* Recurrence inputs */
+        .recur-fields {
+            align-items: center;
+        }
+
+        .recur-label {
+            font-size: 14px;
+            color: #666;
+            flex-shrink: 0;
+        }
+
+        .recur-num {
+            width: 70px;
+            flex: 0 0 auto !important;
+        }
+
+        .recur-rate {
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            background: white;
+            cursor: pointer;
+        }
+
         .item-date-created {
             font-size: 11px;
             color: #999;
@@ -239,6 +276,7 @@
 
         input[type="text"],
         input[type="date"],
+        input[type="number"],
         textarea {
             padding: 12px;
             border: 1px solid #e0e0e0;
@@ -350,14 +388,27 @@
                     <div class="form-row">
                         <input type="text" id="task-name" placeholder="Task name..." autocomplete="off">
                     </div>
-                    <div class="form-row">
+                    <div class="form-row" id="task-due-row">
                         <input type="date" id="task-due">
-                        <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
+                    </div>
+                    <div class="form-row recur-fields" id="recur-fields" hidden>
+                        <label class="recur-label" for="task-frequency">Repeat every</label>
+                        <input type="number" id="task-frequency" class="recur-num" min="1" value="1">
+                        <select id="task-rate" class="recur-rate">
+                            <option value="days">days</option>
+                            <option value="weeks">weeks</option>
+                            <option value="months">months</option>
+                        </select>
+                    </div>
+                    <div class="privacy-toggle">
+                        <input type="checkbox" id="task-recurring">
+                        <label for="task-recurring">Recurring</label>
                     </div>
                     <div class="privacy-toggle">
                         <input type="checkbox" id="task-private">
                         <label for="task-private">Private</label>
                     </div>
+                    <button type="submit" class="add-btn" id="task-add-btn">Add Task</button>
                 </div>
             </section>
 
@@ -472,6 +523,12 @@
             return div.innerHTML;
         }
 
+        // Today as YYYY-MM-DD (local), for comparing against task due dates.
+        function todayStr() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
         // ===== TASKS =====
 
         async function loadTasks() {
@@ -494,15 +551,35 @@
             if (tasks.length === 0) {
                 taskList.innerHTML = '<div class="empty-state">No tasks yet. Add one to get started!</div>';
             } else {
-                // Sort: incomplete first, completed at bottom
+                const today = todayStr();
+                // Effective date: recurring tasks use Next Due, one-offs use Due Date.
+                const effDate = t => t.recurring ? t.nextDue : t.dueDate;
+
+                // Sort: incomplete first; within that, soonest due first (no date last).
                 const sorted = [...tasks].sort((a, b) => {
-                    if (a.completed === b.completed) return 0;
-                    return a.completed ? 1 : -1;
+                    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    const da = effDate(a), db = effDate(b);
+                    if (!da && !db) return 0;
+                    if (!da) return 1;
+                    if (!db) return -1;
+                    return da < db ? -1 : (da > db ? 1 : 0);
                 });
 
                 taskList.innerHTML = sorted.map(task => {
                     const privacyTag = !task.shared ? ' 🔒' : '';
-                    const dueDate = task.dueDate ? `<div class="item-meta"><span class="item-due-date">Due: ${task.dueDate}</span></div>` : '';
+
+                    let meta = '';
+                    if (task.recurring) {
+                        const unit = task.frequency == 1 ? task.rate.replace(/s$/, '') : task.rate;
+                        const recurTag = `<span class="item-recur">🔁 every ${task.frequency} ${unit}</span>`;
+                        const overdue = task.nextDue && task.nextDue < today ? ' overdue' : '';
+                        const nextTag = task.nextDue ? `<span class="item-due-date${overdue}">Next: ${task.nextDue}</span>` : '';
+                        meta = `<div class="item-meta">${recurTag}${nextTag}</div>`;
+                    } else if (task.dueDate) {
+                        const overdue = task.dueDate < today ? ' overdue' : '';
+                        meta = `<div class="item-meta"><span class="item-due-date${overdue}">Due: ${task.dueDate}</span></div>`;
+                    }
+
                     return `
                         <div class="item">
                             <input
@@ -513,7 +590,7 @@
                             >
                             <div class="item-content">
                                 <label for="task-${task.id}">${escapeHtml(task.name)}${privacyTag}</label>
-                                ${dueDate}
+                                ${meta}
                             </div>
                             <button class="delete-btn" onclick="deleteTask(${task.id})">Delete</button>
                         </div>
@@ -530,9 +607,17 @@
             const nameInput = document.getElementById('task-name');
             const dueInput = document.getElementById('task-due');
             const privateCheckbox = document.getElementById('task-private');
+            const recurringCheckbox = document.getElementById('task-recurring');
+            const frequencyInput = document.getElementById('task-frequency');
+            const rateInput = document.getElementById('task-rate');
             const name = nameInput.value.trim();
-            const dueDate = dueInput.value;
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
+
+            const recurring = recurringCheckbox.checked;
+            const frequency = recurring ? (parseInt(frequencyInput.value, 10) || 1) : '';
+            const rate = recurring ? rateInput.value : '';
+            // Recurring tasks use Next Due (auto), so the manual due date is ignored.
+            const dueDate = recurring ? '' : dueInput.value;
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -543,13 +628,19 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate }),
                 });
 
                 if (response.ok) {
                     nameInput.value = '';
                     dueInput.value = '';
                     privateCheckbox.checked = false;
+                    // Reset recurrence inputs back to defaults (one-off task).
+                    recurringCheckbox.checked = false;
+                    frequencyInput.value = '1';
+                    rateInput.value = 'days';
+                    document.getElementById('recur-fields').hidden = true;
+                    document.getElementById('task-due-row').hidden = false;
                     await loadTasks();
                 } else {
                     showError('tasks', 'Failed to add task');
@@ -561,6 +652,7 @@
         }
 
         async function toggleTask(id, completed) {
+            const task = tasks.find(t => t.id == id);
             try {
                 const response = await fetch('/api/tasks', {
                     method: 'PUT',
@@ -568,7 +660,13 @@
                     body: JSON.stringify({ id, completed }),
                 });
 
-                if (!response.ok) {
+                if (response.ok) {
+                    // Recurring task: backend reset it (Last Done/Next Due changed,
+                    // stays incomplete) — reload to show the new cycle.
+                    if (task && task.recurring && completed) {
+                        await loadTasks();
+                    }
+                } else {
                     showError('tasks', 'Failed to update task');
                     await loadTasks();
                 }
@@ -851,6 +949,13 @@
         });
         document.getElementById('task-due').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') addTask();
+        });
+
+        // Recurring toggle: reveal frequency/rate inputs, hide the manual due date.
+        document.getElementById('task-recurring').addEventListener('change', (e) => {
+            const on = e.target.checked;
+            document.getElementById('recur-fields').hidden = !on;
+            document.getElementById('task-due-row').hidden = on;
         });
 
         // Shopping form
