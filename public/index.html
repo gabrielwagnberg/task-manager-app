@@ -653,6 +653,12 @@
 
         async function toggleTask(id, completed) {
             const task = tasks.find(t => t.id == id);
+
+            // Optimistic update: reflect the new state and re-render immediately
+            // so the item sorts to the bottom (or back up) right away.
+            if (task) task.completed = completed;
+            renderTasks();
+
             try {
                 const response = await fetch('/api/tasks', {
                     method: 'PUT',
@@ -672,6 +678,7 @@
                 }
             } catch (error) {
                 showError('tasks', 'Error updating task');
+                await loadTasks();
                 console.error('Error:', error);
             }
         }
@@ -786,6 +793,13 @@
         }
 
         async function toggleShoppingItem(id, purchased) {
+            const item = shoppingItems.find(i => i.id == id);
+
+            // Optimistic update: reflect the new state and re-render immediately
+            // so the item sorts to the bottom (or back up) right away.
+            if (item) item.purchased = purchased;
+            renderShopping();
+
             try {
                 const response = await fetch('/api/shopping', {
                     method: 'PUT',
@@ -799,6 +813,7 @@
                 }
             } catch (error) {
                 showError('shopping', 'Error updating item');
+                await loadShopping();
                 console.error('Error:', error);
             }
         }
