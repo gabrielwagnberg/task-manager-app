@@ -706,6 +706,11 @@
             border-color: #ef4444;
         }
 
+        /* Priority indicator dot — inline before task name */
+        .pri { font-size: 10px; margin-right: 3px; vertical-align: middle; line-height: 1; }
+        .pri-1 { color: #dc2626; }
+        .pri-2 { color: #d97706; }
+
     </style>
 </head>
 <body>
@@ -888,10 +893,10 @@
                 activeProjectFilter = 'all';
             }
 
-            // The project filter bar only applies to Tasks & Shopping.
-            // Re-render pills so the Recurring pill appears on Tasks and not on Shopping.
+            // The project filter bar applies to Tasks, Shopping & Notes.
+            // Re-render pills so the Recurring pill appears on Tasks only.
             const filterBar = document.getElementById('project-filter-bar');
-            const showFilter = sectionName === 'tasks' || sectionName === 'shopping';
+            const showFilter = sectionName === 'tasks' || sectionName === 'shopping' || sectionName === 'notes';
             filterBar.classList.toggle('visible', showFilter);
             if (showFilter) renderProjectFilter();
 
@@ -966,9 +971,12 @@
                 // Effective date: recurring tasks use Next Due, one-offs use Due Date.
                 const effDate = t => t.recurring ? t.nextDue : t.dueDate;
 
-                // Sort: incomplete first; within that, soonest due first (no date last).
+                // Sort: incomplete first → priority (1 first, none last) → soonest due first (no date last).
                 const sorted = [...visible].sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    const pa = a.priority ? parseInt(a.priority) : 999;
+                    const pb = b.priority ? parseInt(b.priority) : 999;
+                    if (pa !== pb) return pa - pb;
                     const da = effDate(a), db = effDate(b);
                     if (!da && !db) return 0;
                     if (!da) return 1;
@@ -980,6 +988,9 @@
                     const recurIcon  = task.recurring ? ' 🔁' : '';
                     const privacyTag = !task.shared   ? ' 🔒' : '';
                     const completedClass = task.completed ? ' completed' : '';
+                    const priDot = task.priority == 1 ? '<span class="pri pri-1">●</span>'
+                                 : task.priority == 2 ? '<span class="pri pri-2">●</span>'
+                                 : '';
 
                     // Due date line — recurring uses nextDue, one-off uses dueDate
                     let dateLine = '';
@@ -1000,7 +1011,7 @@
                                 id="task-${task.id}"
                             >
                             <div class="item-content">
-                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${escapeHtml(task.name)}${recurIcon}${privacyTag}</button>
+                                <button class="item-name-btn" onclick="openModal('task', ${task.id})">${priDot}${escapeHtml(task.name)}${recurIcon}${privacyTag}</button>
                                 ${dateLine}
                             </div>
                         </div>
@@ -1082,15 +1093,19 @@
             const frequencyInput = document.getElementById('task-frequency');
             const rateInput = document.getElementById('task-rate');
             const projectInput = document.getElementById('task-project');
+            const priorityInput = document.getElementById('task-priority');
             const name = nameInput.value.trim();
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
             const project = projectInput.value;
+            const priority = priorityInput ? priorityInput.value : '';
 
             const recurring = recurringCheckbox.checked;
             const frequency = recurring ? (parseInt(frequencyInput.value, 10) || 1) : '';
             const rate = recurring ? rateInput.value : '';
-            // Recurring tasks use Next Due (auto), so the manual due date is ignored.
+            // For recurring tasks, the date field is "Next due (optional)".
+            // If set, the backend uses it directly; if blank, it auto-computes.
             const dueDate = recurring ? '' : dueInput.value;
+            const nextDue = recurring ? dueInput.value : '';
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -1101,7 +1116,7 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, nextDue }),
                 });
 
                 if (response.ok) {
@@ -1109,12 +1124,12 @@
                     dueInput.value = '';
                     privateCheckbox.checked = false;
                     projectInput.value = '';
+                    if (priorityInput) priorityInput.value = '';
                     // Reset recurrence inputs back to defaults (one-off task).
                     recurringCheckbox.checked = false;
                     frequencyInput.value = '1';
                     rateInput.value = 'days';
                     document.getElementById('recur-fields').hidden = true;
-                    document.getElementById('task-due-row').hidden = false;
                     closeModal();
                     await loadTasks();
                 } else {
@@ -1394,11 +1409,15 @@
             const notesList = document.getElementById('notes-list');
             const loading = document.getElementById('notes-loading');
 
-            if (notes.length === 0) {
-                notesList.innerHTML = '<div class="empty-state">No notes yet. Create one to get started!</div>';
+            const filteredNotes = notes.filter(n => matchesProjectFilter(n));
+            if (filteredNotes.length === 0) {
+                const msg = notes.length === 0 ? 'No notes yet. Create one to get started!'
+                          : activeProjectFilter !== 'all' ? 'No notes in this project.'
+                          : 'No notes yet. Create one to get started!';
+                notesList.innerHTML = `<div class="empty-state">${msg}</div>`;
             } else {
                 // Sort by last edited (falls back to dateCreated), newest first
-                const sorted = [...notes].sort((a, b) => {
+                const sorted = [...filteredNotes].sort((a, b) => {
                     const da = new Date(a.lastEdited || a.dateCreated);
                     const db = new Date(b.lastEdited || b.dateCreated);
                     return db - da;
@@ -1557,12 +1576,14 @@
             // Re-render whichever list is showing.
             if (activeSection === 'tasks') renderTasks();
             else if (activeSection === 'shopping') renderShopping();
+            else if (activeSection === 'notes') renderNotes();
         }
 
         // Fill the project <select> dropdowns in the add-forms.
         function populateProjectDropdowns() {
             const options = '<option value="">No project</option>' +
-                projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+                [...projects].sort((a, b) => a.name.localeCompare(b.name))
+                    .map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
             ['task-project', 'shopping-project', 'note-project'].forEach(selId => {
                 const sel = document.getElementById(selId);
                 if (!sel) return;
@@ -1698,7 +1719,8 @@
         function renderAddForm(section) {
             const form = document.getElementById('modal-add-form');
             const projOptions = '<option value="">No project</option>' +
-                projects.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+                [...projects].sort((a, b) => a.name.localeCompare(b.name))
+                    .map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
 
             if (section === 'tasks') {
                 form.innerHTML = `
@@ -1708,11 +1730,20 @@
                             onkeypress="if(event.key==='Enter') submitAddForm()">
                     </div>
                     <div class="modal-field">
+                        <div class="modal-field-label">Priority</div>
+                        <select id="task-priority">
+                            <option value="">— No priority —</option>
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                        </select>
+                    </div>
+                    <div class="modal-field">
                         <div class="modal-field-label">Project</div>
                         <select id="task-project">${projOptions}</select>
                     </div>
-                    <div class="modal-field" id="task-due-row">
-                        <div class="modal-field-label">Due date</div>
+                    <div class="modal-field">
+                        <div class="modal-field-label"><span id="task-due-label">Due date</span> <span id="task-due-note" style="font-weight:400;text-transform:none;font-size:11px;display:none"></span></div>
                         <input type="date" id="task-due">
                     </div>
                     <div class="modal-field">
@@ -1803,7 +1834,15 @@
         function toggleAddRecurring() {
             const on = document.getElementById('task-recurring').checked;
             document.getElementById('recur-fields').hidden = !on;
-            document.getElementById('task-due-row').hidden = on;
+            const dueLabel = document.getElementById('task-due-label');
+            const dueNote  = document.getElementById('task-due-note');
+            if (dueLabel) {
+                dueLabel.textContent = on ? 'Next due' : 'Due date';
+            }
+            if (dueNote) {
+                dueNote.textContent  = on ? '(optional — leave blank to auto-calculate)' : '';
+                dueNote.style.display = on ? '' : 'none';
+            }
         }
 
         function submitAddForm() {
@@ -1865,6 +1904,7 @@
 
             if (type === 'task') {
                 rows.push(['Name', escapeHtml(data.name)]);
+                if (data.priority) rows.push(['Priority', data.priority]);
                 if (data.recurring) {
                     const unit = data.frequency == 1 ? data.rate.replace(/s$/, '') : data.rate;
                     rows.push(['Repeat', `Every ${data.frequency} ${unit}`]);
@@ -1919,8 +1959,13 @@
 
             if (type === 'task') {
                 const projOptions = '<option value="">No project</option>' +
-                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+                    [...projects].sort((a, b) => a.name.localeCompare(b.name))
+                        .map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
                 const isRecurring = !!data.recurring;
+                // Date field doubles as "Due date" (one-off) or "Next due" (recurring).
+                const dateLabel = isRecurring ? 'Next due' : 'Due date';
+                const dateLabelNote = isRecurring ? '(optional)' : '';
+                const dateValue = isRecurring ? (data.nextDue || '') : (data.dueDate || '');
 
                 form.innerHTML = `
                     <div class="modal-field">
@@ -1928,12 +1973,21 @@
                         <input type="text" id="edit-name" value="${escapeHtml(data.name)}">
                     </div>
                     <div class="modal-field">
+                        <div class="modal-field-label">Priority</div>
+                        <select id="edit-priority">
+                            <option value="" ${!data.priority ? 'selected' : ''}>— No priority —</option>
+                            <option value="1" ${data.priority == 1 ? 'selected' : ''}>1</option>
+                            <option value="2" ${data.priority == 2 ? 'selected' : ''}>2</option>
+                            <option value="3" ${data.priority == 3 ? 'selected' : ''}>3</option>
+                        </select>
+                    </div>
+                    <div class="modal-field">
                         <div class="modal-field-label">Project</div>
                         <select id="edit-project">${projOptions}</select>
                     </div>
                     <div class="modal-field">
-                        <div class="modal-field-label">Due date <span id="edit-due-label-note" style="font-weight:400;text-transform:none">(ignored if recurring)</span></div>
-                        <input type="date" id="edit-due" value="${data.dueDate || ''}">
+                        <div class="modal-field-label"><span id="edit-due-label-text">${dateLabel}</span> <span id="edit-due-label-note" style="font-weight:400;text-transform:none;font-size:11px">${dateLabelNote}</span></div>
+                        <input type="date" id="edit-due" value="${dateValue}">
                     </div>
                     <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -1961,7 +2015,8 @@
                 `;
             } else if (type === 'shopping') {
                 const projOptions = '<option value="">No project</option>' +
-                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+                    [...projects].sort((a, b) => a.name.localeCompare(b.name))
+                        .map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
                 form.innerHTML = `
                     <div class="modal-field">
                         <div class="modal-field-label">Name</div>
@@ -1987,7 +2042,8 @@
                 `;
             } else if (type === 'note') {
                 const projOptions = '<option value="">No project</option>' +
-                    projects.map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+                    [...projects].sort((a, b) => a.name.localeCompare(b.name))
+                        .map(p => `<option value="${p.id}" ${p.id == data.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
                 form.innerHTML = `
                     <div class="modal-field">
                         <div class="modal-field-label">Subject <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
@@ -2032,6 +2088,23 @@
         function toggleEditRecurring() {
             const on = document.getElementById('edit-recurring').checked;
             document.getElementById('edit-recur-fields').hidden = !on;
+            const labelText = document.getElementById('edit-due-label-text');
+            const labelNote = document.getElementById('edit-due-label-note');
+            const dueInput  = document.getElementById('edit-due');
+            if (labelText) {
+                labelText.textContent = on ? 'Next due' : 'Due date';
+            }
+            if (labelNote) {
+                labelNote.textContent = on ? '(optional)' : '';
+            }
+            // Swap the prefilled date to the relevant field's value when toggling.
+            if (dueInput && modalItem) {
+                if (on && !dueInput.value && modalItem.data.nextDue) {
+                    dueInput.value = modalItem.data.nextDue;
+                } else if (!on && !dueInput.value && modalItem.data.dueDate) {
+                    dueInput.value = modalItem.data.dueDate;
+                }
+            }
         }
 
         // ── Save ──────────────────────────────────────────────────────────────
@@ -2044,12 +2117,17 @@
                 const name = document.getElementById('edit-name').value.trim();
                 if (!name) { alert('Name is required'); return; }
                 const recurring = document.getElementById('edit-recurring').checked;
+                const dateVal = document.getElementById('edit-due').value;
                 body = {
                     id: data.id,
                     name,
-                    dueDate: document.getElementById('edit-due').value,
+                    // Recurring: send nextDue override (may be blank → backend auto-computes).
+                    // One-off: send as dueDate.
+                    dueDate: recurring ? '' : dateVal,
+                    nextDue: recurring ? dateVal : '',
                     shared: !document.getElementById('edit-private').checked,
                     project: document.getElementById('edit-project').value,
+                    priority: document.getElementById('edit-priority').value,
                     recurring,
                     frequency: recurring ? (parseInt(document.getElementById('edit-frequency').value, 10) || 1) : '',
                     rate: recurring ? document.getElementById('edit-rate').value : '',

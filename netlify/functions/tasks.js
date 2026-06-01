@@ -43,10 +43,10 @@ const rowIsRecurring = (row) => {
   return freq !== undefined && freq !== null && String(freq).trim() !== '';
 };
 
-// Columns the Tasks sheet must have. Recurrence added the last four.
+// Columns the Tasks sheet must have. Recurrence added the last four; Priority added later.
 const REQUIRED_HEADERS = [
   'Task ID', 'Task Name', 'Completed', 'Due Date', 'Owner', 'Shared',
-  'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project',
+  'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project', 'Priority',
 ];
 
 // Make sure every required column exists in the header row, appending any
@@ -118,6 +118,7 @@ exports.handler = async (event, context) => {
         lastDone: row.get('Last Done') || '',
         nextDue: row.get('Next Due') || '',
         project: row.get('Project') || '',
+        priority: row.get('Priority') || '',
       }));
 
       return {
@@ -129,7 +130,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new task
-      const { name, dueDate, owner, shared, recurring, frequency, rate, project } = JSON.parse(event.body);
+      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, nextDue: nextDueOverride } = JSON.parse(event.body);
 
       if (!name) {
         return {
@@ -147,11 +148,15 @@ exports.handler = async (event, context) => {
       const newId = maxId + 1;
 
       // Recurring task: seed Last Done = today, Next Due = today + interval.
-      // The manual Due Date is ignored for recurring tasks (Next Due drives it).
+      // If the caller supplied a nextDue override (user set a specific start date),
+      // use it directly instead of computing from today.
       const isRecurring = !!recurring && !!frequency;
       const recurRate = rate || 'days';
       const lastDone = isRecurring ? todayStr() : '';
-      const nextDue = isRecurring ? computeNextDue(lastDone, frequency, recurRate) : '';
+      const providedNextDue = nextDueOverride && String(nextDueOverride).trim() ? String(nextDueOverride).trim() : null;
+      const nextDue = isRecurring
+        ? (providedNextDue || computeNextDue(lastDone, frequency, recurRate))
+        : '';
 
       await sheet.addRow({
         'Task ID': newId,
@@ -165,6 +170,7 @@ exports.handler = async (event, context) => {
         'Last Done': lastDone,
         'Next Due': nextDue,
         'Project': project || '',
+        'Priority': priority || '',
       });
 
       return {
@@ -182,6 +188,7 @@ exports.handler = async (event, context) => {
           lastDone,
           nextDue,
           project: project || '',
+          priority: priority || '',
         }),
         headers: { 'Content-Type': 'application/json' },
       };
@@ -207,23 +214,30 @@ exports.handler = async (event, context) => {
 
       // ── Full edit (name present in body) ──────────────────────────────────
       if (typeof body.name !== 'undefined') {
-        const { name, dueDate, shared, recurring, frequency, rate, project } = body;
+        const { name, dueDate, shared, recurring, frequency, rate, project, priority, nextDue: nextDueOverride } = body;
 
         if (name !== undefined) row.set('Task Name', name);
         if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
         if (project !== undefined) row.set('Project', project || '');
+        if (priority !== undefined) row.set('Priority', priority || '');
 
         const isRecurring = !!recurring && !!frequency;
         if (isRecurring) {
           const recurRate = rate || 'days';
-          // Keep existing Last Done; recalculate Next Due from it (or today).
-          const lastDone = row.get('Last Done') || todayStr();
-          const nextDue = computeNextDue(lastDone, frequency, recurRate);
           row.set('Frequency', frequency);
           row.set('Rate', recurRate);
-          row.set('Last Done', lastDone);
-          row.set('Next Due', nextDue);
           row.set('Due Date', '');
+          // If the user explicitly set a next due date, use it directly.
+          // Otherwise recompute from existing Last Done (preserves the cycle).
+          const providedNextDue = nextDueOverride && String(nextDueOverride).trim() ? String(nextDueOverride).trim() : null;
+          if (providedNextDue) {
+            row.set('Next Due', providedNextDue);
+            // Leave Last Done unchanged — it reflects when the task was last completed.
+          } else {
+            const lastDone = row.get('Last Done') || todayStr();
+            row.set('Last Done', lastDone);
+            row.set('Next Due', computeNextDue(lastDone, frequency, recurRate));
+          }
         } else {
           // Switching to one-off or updating due date
           row.set('Frequency', '');
@@ -250,6 +264,7 @@ exports.handler = async (event, context) => {
             lastDone: row.get('Last Done') || '',
             nextDue: row.get('Next Due') || '',
             project: row.get('Project') || '',
+            priority: row.get('Priority') || '',
           }),
           headers: { 'Content-Type': 'application/json' },
         };
