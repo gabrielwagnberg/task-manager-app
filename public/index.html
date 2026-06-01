@@ -639,13 +639,49 @@
             font-size: 14px;
         }
 
-        /* App title */
+        /* App header row (title + refresh button) */
+        .app-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
         .app-title {
             font-size: 22px;
             font-weight: 700;
             color: #111;
             letter-spacing: -0.3px;
-            margin-bottom: 20px;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #bbb;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 6px;
+            line-height: 1;
+            transition: color 0.2s, background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            color: #555;
+            background: #f0f0f0;
+        }
+
+        .refresh-btn:disabled {
+            cursor: default;
+        }
+
+        .refresh-btn.spinning {
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to   { transform: rotate(360deg); }
         }
 
         /* Collapsible add-form toggle button */
@@ -724,7 +760,10 @@
 
         <!-- Main App (hidden until user selected) -->
         <div id="main-app" class="main-app">
-            <h1 class="app-title">Task Manager</h1>
+            <div class="app-header">
+                <h1 class="app-title">Task Manager</h1>
+                <button class="refresh-btn" onclick="refreshAll()" title="Refresh">↻</button>
+            </div>
 
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
@@ -864,6 +903,20 @@
             currentUser = name;
             localStorage.setItem('currentUser', name);
             initializeUI();
+        }
+
+        async function refreshAll() {
+            if (!currentUser) return;
+            const btn = document.querySelector('.refresh-btn');
+            if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+            try {
+                await loadProjects();
+                await loadTasks();
+                if (shoppingLoaded) await loadShopping();
+                if (notesLoaded) await loadNotes();
+            } finally {
+                if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+            }
         }
 
         // ===== UTILITIES =====
@@ -1427,15 +1480,12 @@
                     const date = new Date(note.lastEdited || note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     const privacyTag = !note.shared ? ' 🔒' : '';
-                    const projTag = projectTag(note.project);
-                    const meta = projTag ? `<div class="item-meta">${projTag}</div>` : '';
                     // Preview: subject if available, otherwise truncated content
                     const preview = note.subject || (note.content.length > 120 ? note.content.slice(0, 120) + '…' : note.content);
                     return `
                         <div class="item">
                             <div class="item-content">
                                 <button class="item-name-btn" onclick="openModal('note', ${note.id})" style="font-size:14px;line-height:1.4">${escapeHtml(preview)}${privacyTag}</button>
-                                ${meta}
                                 <div class="item-meta item-date-created">${formatted}</div>
                             </div>
                         </div>
