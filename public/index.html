@@ -655,28 +655,22 @@
         }
 
         .refresh-btn {
-            background: none;
-            border: none;
             font-size: 22px;
-            color: #bbb;
+            color: #ccc;
             cursor: pointer;
-            padding: 4px 6px;
-            border-radius: 6px;
             line-height: 1;
-            transition: color 0.2s, background 0.2s;
+            user-select: none;
+            transition: color 0.2s;
+            display: inline-block;
         }
 
         .refresh-btn:hover {
-            color: #555;
-            background: #f0f0f0;
-        }
-
-        .refresh-btn:disabled {
-            cursor: default;
+            color: #888;
         }
 
         .refresh-btn.spinning {
             animation: spin 0.7s linear infinite;
+            color: #888;
         }
 
         @keyframes spin {
@@ -762,7 +756,7 @@
         <div id="main-app" class="main-app">
             <div class="app-header">
                 <h1 class="app-title">Task Manager</h1>
-                <button class="refresh-btn" onclick="refreshAll()" title="Refresh">↻</button>
+                <span class="refresh-btn" onclick="refreshAll()" title="Refresh">↻</span>
             </div>
 
             <!-- Main Tab Navigation -->
@@ -905,17 +899,20 @@
             initializeUI();
         }
 
+        let isRefreshing = false;
         async function refreshAll() {
-            if (!currentUser) return;
-            const btn = document.querySelector('.refresh-btn');
-            if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
+            if (!currentUser || isRefreshing) return;
+            isRefreshing = true;
+            const icon = document.querySelector('.refresh-btn');
+            if (icon) icon.classList.add('spinning');
             try {
                 await loadProjects();
                 await loadTasks();
                 if (shoppingLoaded) await loadShopping();
                 if (notesLoaded) await loadNotes();
             } finally {
-                if (btn) { btn.classList.remove('spinning'); btn.disabled = false; }
+                isRefreshing = false;
+                if (icon) icon.classList.remove('spinning');
             }
         }
 
