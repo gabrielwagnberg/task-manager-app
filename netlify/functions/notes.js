@@ -25,6 +25,17 @@ const initializeSheet = async () => {
   return doc;
 };
 
+// Ensure the Notes sheet has all required columns (auto-provisions new ones).
+const ensureNotesHeaders = async (sheet) => {
+  await sheet.loadHeaderRow();
+  const existing = sheet.headerValues || [];
+  const required = ['Note ID', 'Note', 'Date Created', 'Owner', 'Shared', 'Project', 'Subject', 'Last Edited'];
+  const missing = required.filter(h => !existing.includes(h));
+  if (missing.length > 0) {
+    await sheet.setHeaderRow([...existing, ...missing]);
+  }
+};
+
 // Main handler — routes requests based on HTTP method
 exports.handler = async (event, context) => {
   const method = event.httpMethod;
@@ -35,6 +46,7 @@ exports.handler = async (event, context) => {
       const user = event.queryStringParameters?.user;
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Notes'];
+      await ensureNotesHeaders(sheet);
       const rows = await sheet.getRows();
 
       // Filter: show if shared OR user is the owner
@@ -46,8 +58,10 @@ exports.handler = async (event, context) => {
 
       const notes = visibleRows.map(row => ({
         id: row.get('Note ID'),
+        subject: row.get('Subject') || '',
         content: row.get('Note'),
         dateCreated: row.get('Date Created'),
+        lastEdited: row.get('Last Edited') || row.get('Date Created'),
         owner: row.get('Owner') || '',
         shared: row.get('Shared') === 'TRUE' || row.get('Shared') === true,
         project: row.get('Project') || '',
@@ -62,7 +76,7 @@ exports.handler = async (event, context) => {
 
     if (method === 'POST') {
       // Add a new note
-      const { content, owner, shared, project } = JSON.parse(event.body);
+      const { subject, content, owner, shared, project } = JSON.parse(event.body);
 
       if (!content) {
         return {
@@ -73,6 +87,7 @@ exports.handler = async (event, context) => {
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Notes'];
+      await ensureNotesHeaders(sheet);
       const rows = await sheet.getRows();
 
       const maxId = Math.max(...rows.map(r => parseInt(r.get('Note ID')) || 0), 0);
@@ -83,8 +98,10 @@ exports.handler = async (event, context) => {
 
       await sheet.addRow({
         'Note ID': newId,
+        'Subject': subject || '',
         'Note': content,
         'Date Created': now,
+        'Last Edited': now,
         'Owner': owner || '',
         'Shared': shared ? 'TRUE' : 'FALSE',
         'Project': project || '',
@@ -92,17 +109,18 @@ exports.handler = async (event, context) => {
 
       return {
         statusCode: 201,
-        body: JSON.stringify({ id: newId, content, dateCreated: now, owner, shared, project: project || '' }),
+        body: JSON.stringify({ id: newId, subject: subject || '', content, dateCreated: now, lastEdited: now, owner, shared, project: project || '' }),
         headers: { 'Content-Type': 'application/json' },
       };
     }
 
     if (method === 'PUT') {
       // Update a note (content and/or shared)
-      const { id, content, shared, project } = JSON.parse(event.body);
+      const { id, subject, content, shared, project } = JSON.parse(event.body);
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByTitle['Notes'];
+      await ensureNotesHeaders(sheet);
       const rows = await sheet.getRows();
 
       const row = rows.find(r => r.get('Note ID') == id);
@@ -114,17 +132,23 @@ exports.handler = async (event, context) => {
         };
       }
 
+      const now = new Date().toISOString();
+
+      if (subject !== undefined) row.set('Subject', subject || '');
       if (content !== undefined) row.set('Note', content);
       if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
       if (project !== undefined) row.set('Project', project || '');
+      row.set('Last Edited', now);
       await row.save();
 
       return {
         statusCode: 200,
         body: JSON.stringify({
           id,
+          subject: row.get('Subject') || '',
           content: row.get('Note'),
           dateCreated: row.get('Date Created'),
+          lastEdited: now,
           owner: row.get('Owner') || '',
           shared: row.get('Shared') === 'TRUE',
           project: row.get('Project') || '',
