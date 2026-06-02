@@ -792,6 +792,92 @@
         .delete-checked-btn .icon { width: 14px; height: 14px; vertical-align: -2px; }
         .tab .icon { width: 16px; height: 16px; }
 
+        /* ===== CALENDAR ===== */
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .calendar-nav-btn {
+            background: none;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            cursor: pointer;
+            color: #555;
+            display: flex;
+            align-items: center;
+        }
+        .calendar-nav-btn:hover { background: #f5f5f5; }
+        .calendar-month-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: #e8e8e8;
+            border: 1px solid #e8e8e8;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .cal-day-header {
+            background: #f7f7f7;
+            text-align: center;
+            padding: 5px 0;
+            font-size: 10px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .cal-day {
+            background: #fff;
+            min-height: 72px;
+            padding: 3px;
+        }
+        .cal-day.other-month { background: #fafafa; }
+        .cal-day.today .cal-day-num {
+            background: #2563eb;
+            color: #fff;
+            border-radius: 50%;
+        }
+        .cal-day-num {
+            font-size: 11px;
+            font-weight: 500;
+            color: #666;
+            width: 20px;
+            height: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 2px;
+        }
+        .cal-day.other-month .cal-day-num { color: #ccc; }
+        .cal-task {
+            display: block;
+            width: 100%;
+            font-size: 10px;
+            line-height: 1.25;
+            padding: 2px 3px;
+            margin-bottom: 1px;
+            border-radius: 3px;
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cal-task:hover { background: #dbeafe; }
+        .cal-task.overdue { background: #fff1f2; color: #be123c; }
+        .cal-more { font-size: 10px; color: #aaa; padding: 1px 2px; }
+
     </style>
 </head>
 <body>
@@ -813,12 +899,11 @@
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
                 <button class="tab active" data-section="today"><span id="today-badge" class="today-badge" hidden></span><i data-lucide="map-pin" class="icon"></i> Today</button>
+                <button class="tab" data-section="calendar"><i data-lucide="calendar" class="icon"></i> Calendar</button>
                 <button class="tab" data-section="tasks"><i data-lucide="list-checks" class="icon"></i> Tasks</button>
                 <button class="tab" data-section="shopping"><i data-lucide="shopping-cart" class="icon"></i> Shopping</button>
                 <button class="tab" data-section="projects"><i data-lucide="folder" class="icon"></i> Projects</button>
                 <button class="tab" data-section="notes"><i data-lucide="file-text" class="icon"></i> Notes</button>
-                <!-- Calendar tab — hidden until embed solution is decided -->
-                <button class="tab" data-section="calendar" style="display:none"><i data-lucide="calendar" class="icon"></i> Calendar</button>
             </nav>
 
             <!-- Project Filter Bar (shown on Tasks & Shopping only) -->
@@ -872,12 +957,12 @@
 
             <!-- CALENDAR SECTION -->
             <section id="section-calendar" class="section">
-                <iframe id="calendar-iframe"
-                    src="https://calendar.google.com/calendar/embed?height=600&wkst=2&ctz=Europe%2FStockholm&showPrint=0&showTz=0&mode=MONTH&src=Z2FicmllbC53YWduYmVyZ0BnbWFpbC5jb20&src=ZW1hZjBnNmQ3ODZnNnRzNjcyNmVrYmxvNTRAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&src=cXNiZmgxNmljYnUxcDZxZ2ttYWIwYmJvMmNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ&color=%23f09300&color=%23b39ddb&color=%23d81b60"
-                    style="border:0; width:100%; height:520px; border-radius:8px;"
-                    frameborder="0"
-                    scrolling="no">
-                </iframe>
+                <div class="calendar-nav">
+                    <button class="calendar-nav-btn" onclick="prevMonth()"><i data-lucide="chevron-left" class="icon"></i></button>
+                    <span id="calendar-month-title" class="calendar-month-title"></span>
+                    <button class="calendar-nav-btn" onclick="nextMonth()"><i data-lucide="chevron-right" class="icon"></i></button>
+                </div>
+                <div id="calendar-grid" class="calendar-grid"></div>
             </section>
         </div>
     </div>
@@ -943,6 +1028,8 @@
         let shoppingLoaded = false;
         let notesLoaded = false;
         let projectsLoaded = false;
+        let calendarYear  = new Date().getFullYear();
+        let calendarMonth = new Date().getMonth(); // 0–11
 
         // ===== USER SELECTION =====
 
@@ -1019,11 +1106,11 @@
             // The project filter bar applies to Tasks, Shopping & Notes.
             // Re-render pills so the Recurring pill appears on Tasks only.
             const filterBar = document.getElementById('project-filter-bar');
-            const showFilter = sectionName === 'tasks' || sectionName === 'shopping' || sectionName === 'notes';
+            const showFilter = sectionName === 'tasks' || sectionName === 'shopping' || sectionName === 'notes' || sectionName === 'calendar';
             filterBar.classList.toggle('visible', showFilter);
             if (showFilter) renderProjectFilter();
 
-            // Lazy load Shopping, Notes, Projects; re-render Today on tab switch
+            // Lazy load Shopping, Notes, Projects; re-render Today/Calendar on tab switch
             if (sectionName === 'shopping' && !shoppingLoaded) {
                 loadShopping();
             } else if (sectionName === 'notes' && !notesLoaded) {
@@ -1032,6 +1119,8 @@
                 loadProjects();
             } else if (sectionName === 'today' && tasksLoaded) {
                 renderToday();
+            } else if (sectionName === 'calendar' && tasksLoaded) {
+                renderCalendar();
             }
         }
 
@@ -1702,6 +1791,7 @@
             if (activeSection === 'tasks') renderTasks();
             else if (activeSection === 'shopping') renderShopping();
             else if (activeSection === 'notes') renderNotes();
+            else if (activeSection === 'calendar') renderCalendar();
         }
 
         // Fill the project <select> dropdowns in the add-forms.
@@ -2357,6 +2447,90 @@
         }
 
         // ===== EVENT HANDLERS =====
+
+        // ===== CALENDAR =====
+
+        function prevMonth() {
+            if (calendarMonth === 0) { calendarMonth = 11; calendarYear--; }
+            else calendarMonth--;
+            renderCalendar();
+        }
+
+        function nextMonth() {
+            if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; }
+            else calendarMonth++;
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const titleEl = document.getElementById('calendar-month-title');
+            const gridEl  = document.getElementById('calendar-grid');
+            if (!titleEl || !gridEl) return;
+
+            const today = todayStr();
+            const monthNames = ['January','February','March','April','May','June',
+                                'July','August','September','October','November','December'];
+            titleEl.textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
+
+            // Map date string → tasks visible to current user + project filter
+            const taskMap = {};
+            tasks.forEach(task => {
+                if (task.completed) return;
+                const date = task.recurring ? task.nextDue : task.dueDate;
+                if (!date) return;
+                if (!matchesProjectFilter(task)) return;
+                if (!taskMap[date]) taskMap[date] = [];
+                taskMap[date].push(task);
+            });
+            // Sort each day's tasks by priority
+            Object.values(taskMap).forEach(arr =>
+                arr.sort((a, b) => (parseInt(a.priority) || 99) - (parseInt(b.priority) || 99))
+            );
+
+            // Grid geometry — week starts Monday
+            const daysInMonth   = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+            const firstDow      = new Date(calendarYear, calendarMonth, 1).getDay(); // 0=Sun
+            const startPad      = (firstDow + 6) % 7; // Mon=0 … Sun=6
+            const prevMonthDays = new Date(calendarYear, calendarMonth, 0).getDate();
+
+            // Day-of-week headers
+            const dayLabels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+            let html = dayLabels.map(d => `<div class="cal-day-header">${d}</div>`).join('');
+
+            // Leading padding from previous month
+            for (let i = startPad - 1; i >= 0; i--) {
+                html += `<div class="cal-day other-month"><span class="cal-day-num">${prevMonthDays - i}</span></div>`;
+            }
+
+            // Days of this month
+            for (let d = 1; d <= daysInMonth; d++) {
+                const dateStr  = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const isToday  = dateStr === today;
+                const dayTasks = taskMap[dateStr] || [];
+                const maxShow  = 3;
+                const shown    = dayTasks.slice(0, maxShow);
+                const extra    = dayTasks.length - maxShow;
+
+                const taskHtml = shown.map(t => {
+                    const overdueCls = dateStr < today ? ' overdue' : '';
+                    const dot = t.priority == 1 ? '<span class="pri pri-1">●</span>'
+                              : t.priority == 2 ? '<span class="pri pri-2">●</span>' : '';
+                    return `<button class="cal-task${overdueCls}" onclick="openModal('task',${t.id})">${dot}${escapeHtml(t.name)}</button>`;
+                }).join('') + (extra > 0 ? `<div class="cal-more">+${extra}</div>` : '');
+
+                html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
+            }
+
+            // Trailing padding to complete the last row
+            const total    = startPad + daysInMonth;
+            const trailing = (7 - (total % 7)) % 7;
+            for (let d = 1; d <= trailing; d++) {
+                html += `<div class="cal-day other-month"><span class="cal-day-num">${d}</span></div>`;
+            }
+
+            gridEl.innerHTML = html;
+            renderIcons();
+        }
 
         // Tab navigation
         document.querySelectorAll('.tab').forEach(btn => {
