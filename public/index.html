@@ -913,16 +913,15 @@
         /* Bleed week grid to container edges, cancelling the 20px padding so
            the gutter column sits flush left and the grid fills the full card width. */
         .cal-week-container {
-            width: calc(100% + 40px);
             margin-left: -20px;
             margin-right: -20px;
+            overflow: hidden; /* hard stop — prevents any sub-pixel right bleed */
         }
         .cal-week-head {
             display: grid;
-            grid-template-columns: 38px repeat(7, 1fr);
+            grid-template-columns: 26px repeat(7, 1fr);
             border-bottom: 1px solid #e8e8e8;
             background: #f7f7f7;
-            min-width: 340px;
         }
         .cal-wh-gutter { min-width: 0; }
         .cal-wh-day {
@@ -949,11 +948,10 @@
         .cal-wh-day.today b { background: #2563eb; color: #fff; }
         .cal-week-allday {
             display: grid;
-            grid-template-columns: 38px repeat(7, 1fr);
+            grid-template-columns: 26px repeat(7, 1fr);
             border-bottom: 2px solid #e8e8e8;
             min-height: 26px;
             background: #fff;
-            min-width: 340px;
         }
         .cal-allday-gutter {
             font-size: 8px;
@@ -972,8 +970,7 @@
         }
         .cal-week-body {
             display: grid;
-            grid-template-columns: 38px repeat(7, 1fr);
-            min-width: 340px;
+            grid-template-columns: 26px repeat(7, 1fr);
         }
         .cal-week-gutter { position: relative; }
         .cal-hour-label {
@@ -2128,9 +2125,9 @@
                     <div class="modal-field">
                         <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="time" id="task-start-time" style="flex:1">
+                            <input type="time" id="task-start-time" step="300" style="flex:1">
                             <span style="color:#aaa;font-size:13px">–</span>
-                            <input type="time" id="task-end-time" style="flex:1">
+                            <input type="time" id="task-end-time" step="300" style="flex:1">
                         </div>
                     </div>
                     <div class="modal-field">
@@ -2394,9 +2391,9 @@
                     <div class="modal-field">
                         <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
                         <div style="display:flex;gap:8px;align-items:center">
-                            <input type="time" id="edit-start-time" value="${data.startTime || ''}" style="flex:1">
+                            <input type="time" id="edit-start-time" step="300" value="${data.startTime || ''}" style="flex:1">
                             <span style="color:#aaa;font-size:13px">–</span>
-                            <input type="time" id="edit-end-time" value="${data.endTime || ''}" style="flex:1">
+                            <input type="time" id="edit-end-time" step="300" value="${data.endTime || ''}" style="flex:1">
                         </div>
                     </div>
                     <div class="modal-field">
