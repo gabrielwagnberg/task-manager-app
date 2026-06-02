@@ -913,15 +913,16 @@
 
         /* ── Week view ── */
         /* Bleed week grid to container edges, cancelling the 20px padding so
-           the gutter column sits flush left and the grid fills the full card width. */
+           the gutter column sits flush left and the grid fills the full card width.
+           margin-right is only -10px (not -20px) to leave ~10px breathing room on the right. */
         .cal-week-container {
             margin-left: -20px;
-            margin-right: -20px;
+            margin-right: -10px;
             overflow: hidden; /* hard stop — prevents any sub-pixel right bleed */
         }
         .cal-week-head {
             display: grid;
-            grid-template-columns: 26px repeat(7, 1fr);
+            grid-template-columns: 22px repeat(7, 1fr);
             border-bottom: 1px solid #e8e8e8;
             background: #f7f7f7;
         }
@@ -950,7 +951,7 @@
         .cal-wh-day.today b { background: #2563eb; color: #fff; }
         .cal-week-allday {
             display: grid;
-            grid-template-columns: 26px repeat(7, 1fr);
+            grid-template-columns: 22px repeat(7, 1fr);
             border-bottom: 2px solid #e8e8e8;
             min-height: 26px;
             background: #fff;
@@ -959,7 +960,7 @@
             font-size: 8px;
             color: #bbb;
             text-align: right;
-            padding: 4px 5px 0 0;
+            padding: 4px 4px 0 0;
             text-transform: uppercase;
             letter-spacing: 0.2px;
             min-width: 0;
@@ -972,12 +973,12 @@
         }
         .cal-week-body {
             display: grid;
-            grid-template-columns: 26px repeat(7, 1fr);
+            grid-template-columns: 22px repeat(7, 1fr);
         }
         .cal-week-gutter { position: relative; }
         .cal-hour-label {
             position: absolute;
-            right: 4px;
+            right: 3px;
             font-size: 8px;
             color: #bbb;
             transform: translateY(-50%);
@@ -1013,14 +1014,14 @@
         /* ── Day popup (single-day view inside modal) ── */
         .cal-day-view-allday {
             display: grid;
-            grid-template-columns: 26px 1fr;
+            grid-template-columns: 22px 1fr;
             border-bottom: 2px solid #e8e8e8;
             min-height: 26px;
             background: #fff;
         }
         .cal-day-view-body {
             display: grid;
-            grid-template-columns: 26px 1fr;
+            grid-template-columns: 22px 1fr;
         }
 
     </style>
@@ -1156,6 +1157,7 @@
                 <div id="modal-day-content"></div>
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
+                    <button class="modal-btn modal-btn-primary" onclick="openAddBlockForDay()"><i data-lucide="plus" class="icon"></i> Add Block</button>
                 </div>
             </div>
         </div>
@@ -2102,6 +2104,7 @@
             renderAddForm(section);
             document.getElementById('modal-detail').hidden = true;
             document.getElementById('modal-edit').hidden   = true;
+            document.getElementById('modal-day').hidden    = true;
             document.getElementById('modal-add').hidden    = false;
             document.getElementById('modal-overlay').classList.add('open');
         }
@@ -2262,12 +2265,22 @@
         // ── Day popup (tapping a month-view cell) ────────────────────────────
 
         function openDayView(dateStr) {
+            currentDayDate = dateStr;
             document.getElementById('modal-detail').hidden = true;
             document.getElementById('modal-edit').hidden   = true;
             document.getElementById('modal-add').hidden    = true;
             document.getElementById('modal-day').hidden    = false;
             renderDayView(dateStr);
             document.getElementById('modal-overlay').classList.add('open');
+        }
+
+        function openAddBlockForDay() {
+            openAddModal('tasks');
+            document.getElementById('modal-day').hidden = true;
+            if (currentDayDate) {
+                const el = document.getElementById('task-due');
+                if (el) el.value = currentDayDate;
+            }
         }
 
         function renderDayView(dateStr) {
@@ -2347,6 +2360,7 @@
         // Currently open item: { type, data }
         // type: 'task' | 'shopping' | 'note'
         let modalItem = null;
+        let currentDayDate = null;  // set when day popup is open
 
         function openModal(type, id) {
             let data;
