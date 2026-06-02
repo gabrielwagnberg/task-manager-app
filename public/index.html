@@ -836,9 +836,11 @@
         }
         .cal-day {
             background: #fff;
-            min-height: 72px;
+            height: 90px;
             min-width: 0;
-            overflow: hidden;
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
             padding: 3px;
         }
         .cal-day.other-month { background: #fafafa; }
@@ -886,7 +888,6 @@
             min-width: 0;
         }
         .cal-task .icon { flex-shrink: 0; width: 9px; height: 9px; opacity: 0.65; }
-        .cal-more { font-size: 10px; color: #aaa; padding: 1px 2px; }
 
     </style>
 </head>
@@ -2517,15 +2518,11 @@
                 const dateStr  = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const isToday  = dateStr === today;
                 const dayTasks = taskMap[dateStr] || [];
-                const maxShow  = 3;
-                const shown    = dayTasks.slice(0, maxShow);
-                const extra    = dayTasks.length - maxShow;
-
-                const taskHtml = shown.map(t => {
+                const taskHtml = dayTasks.map(t => {
                     const overdueCls = dateStr < today ? ' overdue' : '';
                     const recurIcon  = t.recurring ? ic('repeat') : '';
                     return `<button class="cal-task${overdueCls}" onclick="openModal('task',${t.id})"><span class="cal-task-name">${escapeHtml(t.name)}</span>${recurIcon}</button>`;
-                }).join('') + (extra > 0 ? `<div class="cal-more">+${extra}</div>` : '');
+                }).join('');
 
                 html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
             }
