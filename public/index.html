@@ -841,8 +841,10 @@
             overflow-x: hidden;
             overflow-y: auto;
             -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
             padding: 3px;
         }
+        .cal-day::-webkit-scrollbar { display: none; }
         .cal-day.other-month { background: #fafafa; }
         .cal-day.today .cal-day-num {
             background: #2563eb;
@@ -862,12 +864,10 @@
         }
         .cal-day.other-month .cal-day-num { color: #ccc; }
         .cal-task {
-            display: flex;
-            align-items: center;
-            gap: 2px;
+            display: block;
             width: 100%;
-            font-size: 10px;
-            line-height: 1.25;
+            font-size: 9px;
+            line-height: 1.3;
             padding: 2px 3px;
             margin-bottom: 1px;
             border-radius: 3px;
@@ -876,18 +876,16 @@
             border: none;
             cursor: pointer;
             text-align: left;
-            overflow: hidden;
-        }
-        .cal-task:hover { background: #dbeafe; }
-        .cal-task.overdue { background: #fff1f2; color: #be123c; }
-        .cal-task-name {
-            flex: 1;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-            min-width: 0;
         }
-        .cal-task .icon { flex-shrink: 0; width: 9px; height: 9px; opacity: 0.65; }
+        .cal-task:hover { filter: brightness(0.95); }
+        /* colour coding by group — priority: overdue > private owner > recurring > shared */
+        .cal-task.t-overdue   { background: #fff1f2; color: #be123c; }
+        .cal-task.t-thomas    { background: #f5f3ff; color: #6d28d9; }
+        .cal-task.t-gabriel   { background: #fff7ed; color: #c2410c; }
+        .cal-task.t-recurring { background: #f0fdf4; color: #15803d; }
 
     </style>
 </head>
@@ -2519,9 +2517,11 @@
                 const isToday  = dateStr === today;
                 const dayTasks = taskMap[dateStr] || [];
                 const taskHtml = dayTasks.map(t => {
-                    const overdueCls = dateStr < today ? ' overdue' : '';
-                    const recurIcon  = t.recurring ? ic('repeat') : '';
-                    return `<button class="cal-task${overdueCls}" onclick="openModal('task',${t.id})"><span class="cal-task-name">${escapeHtml(t.name)}</span>${recurIcon}</button>`;
+                    let cls = '';
+                    if (dateStr < today)       cls = 't-overdue';
+                    else if (!t.shared)        cls = t.owner === 'Thomas' ? 't-thomas' : 't-gabriel';
+                    else if (t.recurring)      cls = 't-recurring';
+                    return `<button class="cal-task ${cls}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
                 }).join('');
 
                 html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
