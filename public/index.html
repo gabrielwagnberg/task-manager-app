@@ -995,6 +995,7 @@
         .cal-week-day-body {
             position: relative;
             border-left: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
             min-width: 0;
         }
         .cal-week-day-body.today { background: #fafbff; }
@@ -2335,9 +2336,9 @@
                 gutterHtml += `<div class="cal-hour-label" style="top:${topPx}px${xform ? ';transform:' + xform : ''}">${String(h).padStart(2,'0')}</div>`;
             }
 
-            // Hour lines
+            // Hour lines (bottom closing line comes from border-bottom on .cal-week-day-body)
             let linesHtml = '';
-            for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
+            for (let h = HOUR_START; h <= HOUR_END; h++) {
                 linesHtml += `<div class="cal-hour-line" style="top:${(h - HOUR_START) * HOUR_H}px"></div>`;
             }
 
@@ -2963,9 +2964,9 @@
                 const isToday   = ds === today;
                 const timedTasks = (taskMap[ds] || []).filter(t => t.startTime);
 
-                // Hour grid lines
+                // Hour grid lines (bottom closing line comes from border-bottom on .cal-week-day-body)
                 let linesHtml = '';
-                for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
+                for (let h = HOUR_START; h <= HOUR_END; h++) {
                     linesHtml += `<div class="cal-hour-line" style="top:${(h - HOUR_START) * HOUR_H}px"></div>`;
                 }
 
