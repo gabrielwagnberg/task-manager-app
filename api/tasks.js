@@ -46,7 +46,7 @@ const rowIsRecurring = (row) => {
 // Columns the Tasks sheet must have. Recurrence added the last four; Priority added later.
 const REQUIRED_HEADERS = [
   'Task ID', 'Task Name', 'Completed', 'Due Date', 'Owner', 'Shared',
-  'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project', 'Priority',
+  'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project', 'Priority', 'Assigned To',
 ];
 
 // Make sure every required column exists in the header row, appending any
@@ -117,13 +117,14 @@ module.exports = async (req, res) => {
         nextDue: row.get('Next Due') || '',
         project: row.get('Project') || '',
         priority: row.get('Priority') || '',
+        assignedTo: row.get('Assigned To') || '',
       }));
 
       return res.status(200).json(tasks);
     }
 
     if (method === 'POST') {
-      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, nextDue: nextDueOverride } = req.body;
+      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride } = req.body;
 
       if (!name) {
         return res.status(400).json({ error: 'Task name is required' });
@@ -158,6 +159,7 @@ module.exports = async (req, res) => {
         'Next Due': nextDue,
         'Project': project || '',
         'Priority': priority || '',
+        'Assigned To': assignedTo || '',
       });
 
       return res.status(201).json({
@@ -174,6 +176,7 @@ module.exports = async (req, res) => {
         nextDue,
         project: project || '',
         priority: priority || '',
+        assignedTo: assignedTo || '',
       });
     }
 
@@ -194,12 +197,13 @@ module.exports = async (req, res) => {
 
       // ── Full edit (name present in body) ──────────────────────────────────
       if (typeof body.name !== 'undefined') {
-        const { name, dueDate, shared, recurring, frequency, rate, project, priority, nextDue: nextDueOverride } = body;
+        const { name, dueDate, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride } = body;
 
         if (name !== undefined) row.set('Task Name', name);
         if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
         if (project !== undefined) row.set('Project', project || '');
         if (priority !== undefined) row.set('Priority', priority || '');
+        if (assignedTo !== undefined) row.set('Assigned To', assignedTo || '');
 
         const isRecurring = !!recurring && !!frequency;
         if (isRecurring) {
@@ -239,6 +243,7 @@ module.exports = async (req, res) => {
           nextDue: row.get('Next Due') || '',
           project: row.get('Project') || '',
           priority: row.get('Priority') || '',
+          assignedTo: row.get('Assigned To') || '',
         });
       }
 

@@ -871,21 +871,20 @@
             padding: 2px 3px;
             margin-bottom: 1px;
             border-radius: 3px;
-            background: #eff6ff;
-            color: #1d4ed8;
+            background: #e5e7eb;
+            color: #374151;
             border: none;
             cursor: pointer;
             text-align: left;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
+            text-overflow: clip;
         }
-        .cal-task:hover { filter: brightness(0.95); }
-        /* colour coding by group — priority: overdue > private owner > recurring > shared */
-        .cal-task.t-overdue   { background: #fff1f2; color: #be123c; }
-        .cal-task.t-thomas    { background: #f5f3ff; color: #6d28d9; }
-        .cal-task.t-gabriel   { background: #fff7ed; color: #c2410c; }
-        .cal-task.t-recurring { background: #f0fdf4; color: #15803d; }
+        .cal-task:hover { filter: brightness(0.93); }
+        /* colour coding by assigned person / recurring */
+        .cal-task.t-thomas    { background: #a5b4fc; color: #1e1b4b; }
+        .cal-task.t-gabriel   { background: #fb923c; color: #431407; }
+        .cal-task.t-recurring { background: #f9a8d4; color: #831843; }
 
     </style>
 </head>
@@ -1317,10 +1316,12 @@
             const rateInput = document.getElementById('task-rate');
             const projectInput = document.getElementById('task-project');
             const priorityInput = document.getElementById('task-priority');
+            const assignedToInput = document.getElementById('task-assigned-to');
             const name = nameInput.value.trim();
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
             const project = projectInput.value;
             const priority = priorityInput ? priorityInput.value : '';
+            const assignedTo = assignedToInput ? assignedToInput.value : '';
 
             const recurring = recurringCheckbox.checked;
             const frequency = recurring ? (parseInt(frequencyInput.value, 10) || 1) : '';
@@ -1339,7 +1340,7 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, nextDue }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue }),
                 });
 
                 if (response.ok) {
@@ -1955,6 +1956,14 @@
                             onkeypress="if(event.key==='Enter') submitAddForm()">
                     </div>
                     <div class="modal-field">
+                        <div class="modal-field-label">Assign to</div>
+                        <select id="task-assigned-to">
+                            <option value="">— Unassigned —</option>
+                            <option value="Gabriel">Gabriel</option>
+                            <option value="Thomas">Thomas</option>
+                        </select>
+                    </div>
+                    <div class="modal-field">
                         <div class="modal-field-label">Priority</div>
                         <select id="task-priority">
                             <option value="">— No priority —</option>
@@ -2129,6 +2138,7 @@
 
             if (type === 'task') {
                 rows.push(['Name', escapeHtml(data.name)]);
+                if (data.assignedTo) rows.push(['Assigned to', data.assignedTo]);
                 if (data.priority) rows.push(['Priority', data.priority]);
                 if (data.recurring) {
                     const unit = data.frequency == 1 ? data.rate.replace(/s$/, '') : data.rate;
@@ -2197,6 +2207,14 @@
                     <div class="modal-field">
                         <div class="modal-field-label">Name</div>
                         <input type="text" id="edit-name" value="${escapeHtml(data.name)}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Assign to</div>
+                        <select id="edit-assigned-to">
+                            <option value="" ${!data.assignedTo ? 'selected' : ''}>— Unassigned —</option>
+                            <option value="Gabriel" ${data.assignedTo === 'Gabriel' ? 'selected' : ''}>Gabriel</option>
+                            <option value="Thomas" ${data.assignedTo === 'Thomas' ? 'selected' : ''}>Thomas</option>
+                        </select>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Priority</div>
@@ -2354,6 +2372,7 @@
                     shared: !document.getElementById('edit-private').checked,
                     project: document.getElementById('edit-project').value,
                     priority: document.getElementById('edit-priority').value,
+                    assignedTo: document.getElementById('edit-assigned-to').value,
                     recurring,
                     frequency: recurring ? (parseInt(document.getElementById('edit-frequency').value, 10) || 1) : '',
                     rate: recurring ? document.getElementById('edit-rate').value : '',
@@ -2518,9 +2537,9 @@
                 const dayTasks = taskMap[dateStr] || [];
                 const taskHtml = dayTasks.map(t => {
                     let cls = '';
-                    if (dateStr < today)       cls = 't-overdue';
-                    else if (!t.shared)        cls = t.owner === 'Thomas' ? 't-thomas' : 't-gabriel';
-                    else if (t.recurring)      cls = 't-recurring';
+                    if (t.assignedTo === 'Thomas')       cls = 't-thomas';
+                    else if (t.assignedTo === 'Gabriel') cls = 't-gabriel';
+                    else if (t.recurring)                cls = 't-recurring';
                     return `<button class="cal-task ${cls}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
                 }).join('');
 
