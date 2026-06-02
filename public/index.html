@@ -956,7 +956,7 @@
         .cal-week-allday {
             display: grid;
             grid-template-columns: 22px repeat(7, 1fr);
-            border-bottom: 2px solid #e8e8e8;
+            /* no border-bottom here — applied to day columns only so gutter stays clear */
             border-right: 1px solid #f0f0f0;
             min-height: 26px;
             background: #fff;
@@ -973,6 +973,7 @@
         .cal-allday-col {
             padding: 2px 2px;
             border-left: 1px solid #f0f0f0;
+            border-bottom: 2px solid #e8e8e8; /* separator lives here, not on the full row */
             min-width: 0;
             overflow: hidden;
         }
@@ -1022,7 +1023,7 @@
         .cal-day-view-allday {
             display: grid;
             grid-template-columns: 22px 1fr;
-            border-bottom: 2px solid #e8e8e8;
+            /* no border-bottom here — applied to day column only so gutter stays clear */
             border-right: 1px solid #f0f0f0;
             min-height: 26px;
             background: #fff;
@@ -2332,9 +2333,7 @@
             let gutterHtml = '';
             for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
                 const topPx = (h - HOUR_START) * HOUR_H;
-                const xform = h === HOUR_START   ? 'translateY(2px)'
-                            : h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))'
-                            : '';
+                const xform = h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))' : '';
                 gutterHtml += `<div class="cal-hour-label" style="top:${topPx}px${xform ? ';transform:' + xform : ''}">${String(h).padStart(2,'0')}</div>`;
             }
 
@@ -2955,9 +2954,7 @@
             let gutterHtml = '';
             for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
                 const topPx = (h - HOUR_START) * HOUR_H;
-                const xform = h === HOUR_START   ? 'translateY(2px)'
-                            : h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))'
-                            : '';
+                const xform = h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))' : '';
                 gutterHtml += `<div class="cal-hour-label" style="top:${topPx}px${xform ? ';transform:' + xform : ''}">${String(h).padStart(2,'0')}</div>`;
             }
 
