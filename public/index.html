@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Task Manager</title>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -655,13 +656,13 @@
         }
 
         .refresh-btn {
-            font-size: 22px;
             color: #ccc;
             cursor: pointer;
             line-height: 1;
             user-select: none;
             transition: color 0.2s;
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
         }
 
         .refresh-btn:hover {
@@ -741,6 +742,23 @@
         .pri-1 { color: #dc2626; }
         .pri-2 { color: #d97706; }
 
+        /* Lucide icon sizing — SVG inherits class after createIcons() replaces <i> */
+        .icon {
+            width: 14px;
+            height: 14px;
+            vertical-align: -2px;
+            display: inline;
+            stroke-width: 2.5;
+            flex-shrink: 0;
+        }
+
+        /* Larger icons for specific contexts */
+        .refresh-btn .icon { width: 20px; height: 20px; vertical-align: -4px; }
+        .modal-close .icon { width: 18px; height: 18px; vertical-align: -4px; }
+        .add-toggle-btn .icon { width: 15px; height: 15px; vertical-align: -3px; }
+        .delete-checked-btn .icon { width: 14px; height: 14px; vertical-align: -2px; }
+        .tab .icon { width: 14px; height: 14px; vertical-align: -2px; }
+
     </style>
 </head>
 <body>
@@ -756,16 +774,16 @@
         <div id="main-app" class="main-app">
             <div class="app-header">
                 <h1 class="app-title">Task Manager</h1>
-                <span class="refresh-btn" onclick="refreshAll()" title="Refresh">↻</span>
+                <span class="refresh-btn" onclick="refreshAll()" title="Refresh"><i data-lucide="refresh-cw" class="icon"></i></span>
             </div>
 
             <!-- Main Tab Navigation -->
             <nav class="tab-nav">
-                <button class="tab active" data-section="today">📌 Today<span id="today-badge" class="today-badge" hidden></span></button>
-                <button class="tab" data-section="tasks">📋 Tasks</button>
-                <button class="tab" data-section="shopping">🛒 Shopping</button>
-                <button class="tab" data-section="notes">📝 Notes</button>
-                <button class="tab" data-section="projects">📁 Projects</button>
+                <button class="tab active" data-section="today"><i data-lucide="map-pin" class="icon"></i> Today<span id="today-badge" class="today-badge" hidden></span></button>
+                <button class="tab" data-section="tasks"><i data-lucide="list-checks" class="icon"></i> Tasks</button>
+                <button class="tab" data-section="shopping"><i data-lucide="shopping-cart" class="icon"></i> Shopping</button>
+                <button class="tab" data-section="notes"><i data-lucide="file-text" class="icon"></i> Notes</button>
+                <button class="tab" data-section="projects"><i data-lucide="folder" class="icon"></i> Projects</button>
             </nav>
 
             <!-- Project Filter Bar (shown on Tasks & Shopping only) -->
@@ -773,7 +791,7 @@
 
             <!-- TODAY SECTION -->
             <section id="section-today" class="section active">
-                <button class="add-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
+                <button class="add-toggle-btn" onclick="openAddModal('tasks')"><i data-lucide="plus" class="icon"></i> Add Task</button>
                 <div id="today-loading" class="loading">Loading...</div>
                 <div id="today-list" class="item-list" hidden></div>
             </section>
@@ -781,10 +799,10 @@
             <!-- TASKS SECTION -->
             <section id="section-tasks" class="section">
                 <div id="tasks-error" class="error"></div>
-                <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')">＋  Add Task</button>
+                <button class="add-toggle-btn" id="tasks-toggle-btn" onclick="openAddModal('tasks')"><i data-lucide="plus" class="icon"></i> Add Task</button>
                 <div id="tasks-loading" class="loading">Loading tasks...</div>
                 <div id="tasks-list" class="item-list" hidden></div>
-                <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden>🗑  Delete Checked</button>
+                <button class="delete-checked-btn" id="tasks-delete-checked-btn" onclick="deleteCheckedTasks()" hidden><i data-lucide="trash-2" class="icon"></i> Delete Checked</button>
             </section>
 
             <!-- SHOPPING SECTION -->
@@ -795,16 +813,16 @@
                 </div>
 
                 <div id="shopping-error" class="error"></div>
-                <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')">＋  Add Item</button>
+                <button class="add-toggle-btn" id="shopping-toggle-btn" onclick="openAddModal('shopping')"><i data-lucide="plus" class="icon"></i> Add Item</button>
                 <div id="shopping-loading" class="loading">Loading shopping items...</div>
                 <div id="shopping-list" class="item-list" hidden></div>
-                <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden>🗑  Delete Checked</button>
+                <button class="delete-checked-btn" id="shopping-delete-checked-btn" onclick="deleteCheckedShoppingItems()" hidden><i data-lucide="trash-2" class="icon"></i> Delete Checked</button>
             </section>
 
             <!-- NOTES SECTION -->
             <section id="section-notes" class="section">
                 <div id="notes-error" class="error"></div>
-                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="openAddModal('notes')">＋  Add Note</button>
+                <button class="add-toggle-btn" id="notes-toggle-btn" onclick="openAddModal('notes')"><i data-lucide="plus" class="icon"></i> Add Note</button>
                 <div id="notes-loading" class="loading">Loading notes...</div>
                 <div id="notes-list" class="item-list" hidden></div>
             </section>
@@ -812,7 +830,7 @@
             <!-- PROJECTS SECTION -->
             <section id="section-projects" class="section">
                 <div id="projects-error" class="error"></div>
-                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="openAddModal('projects')">＋  Add Project</button>
+                <button class="add-toggle-btn" id="projects-toggle-btn" onclick="openAddModal('projects')"><i data-lucide="plus" class="icon"></i> Add Project</button>
                 <div id="projects-loading" class="loading">Loading projects...</div>
                 <div id="projects-list" class="item-list" hidden></div>
             </section>
@@ -824,7 +842,7 @@
         <div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
                 <span class="modal-title" id="modal-title">Details</span>
-                <button class="modal-close" onclick="closeModal()">✕</button>
+                <button class="modal-close" onclick="closeModal()"><i data-lucide="x" class="icon"></i></button>
             </div>
 
             <!-- Detail view -->
@@ -857,6 +875,16 @@
     </div>
 
     <script>
+        // ===== LUCIDE HELPER =====
+        // Returns an <i data-lucide="..."> tag. After lucide.createIcons() runs,
+        // these are replaced with inline SVGs. Call createIcons() after each innerHTML update.
+        function ic(name) {
+            return `<i data-lucide="${name}" class="icon"></i>`;
+        }
+        function renderIcons() {
+            if (window.lucide) lucide.createIcons();
+        }
+
         // ===== STATE =====
         let currentUser = localStorage.getItem('currentUser');
         let tasks = [];
@@ -1035,8 +1063,8 @@
                 });
 
                 taskList.innerHTML = sorted.map(task => {
-                    const recurIcon  = task.recurring ? ' 🔁' : '';
-                    const privacyTag = !task.shared   ? ' 🔒' : '';
+                    const recurIcon  = task.recurring ? ' ' + ic('repeat') : '';
+                    const privacyTag = !task.shared   ? ' ' + ic('lock') : '';
                     const completedClass = task.completed ? ' completed' : '';
                     const priDot = task.priority == 1 ? '<span class="pri pri-1">●</span>'
                                  : task.priority == 2 ? '<span class="pri pri-2">●</span>'
@@ -1073,6 +1101,7 @@
             loading.hidden = true;
             // Show delete-checked button only when there are completed tasks in the current view
             document.getElementById('tasks-delete-checked-btn').hidden = !visible.some(t => t.completed);
+            renderIcons();
 
             // Keep the Today view and its badge in sync whenever tasks change.
             renderToday();
@@ -1112,8 +1141,8 @@
                 todayList.innerHTML = '<div class="empty-state">All caught up! 🎉</div>';
             } else {
                 todayList.innerHTML = urgent.map(task => {
-                    const recurIcon  = task.recurring ? ' 🔁' : '';
-                    const privacyTag = !task.shared   ? ' 🔒' : '';
+                    const recurIcon  = task.recurring ? ' ' + ic('repeat') : '';
+                    const privacyTag = !task.shared   ? ' ' + ic('lock') : '';
                     const dateStr    = task.recurring  ? task.nextDue : task.dueDate;
                     const overdue    = dateStr < today ? ' overdue' : '';
                     const dateLabel  = dateStr === today ? 'Today' : dateStr;
@@ -1133,6 +1162,7 @@
 
             todayList.hidden = false;
             loading.hidden   = true;
+            renderIcons();
         }
 
         async function addTask() {
@@ -1288,7 +1318,7 @@
                 });
 
                 shoppingList.innerHTML = filtered.map(item => {
-                    const privacyTag = !item.shared ? ' 🔒' : '';
+                    const privacyTag = !item.shared ? ' ' + ic('lock') : '';
                     const completedClass = item.purchased ? ' completed' : '';
                     return `
                         <div class="item${completedClass}">
@@ -1308,6 +1338,7 @@
 
             shoppingList.hidden = false;
             loading.hidden = true;
+            renderIcons();
             // Show delete-checked button only when there are purchased items in the current view
             const visiblePurchased = shoppingItems.filter(i =>
                 i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
@@ -1476,7 +1507,7 @@
                 notesList.innerHTML = sorted.map(note => {
                     const date = new Date(note.lastEdited || note.dateCreated);
                     const formatted = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const privacyTag = !note.shared ? ' 🔒' : '';
+                    const privacyTag = !note.shared ? ' ' + ic('lock') : '';
                     // Preview: subject if available, otherwise truncated content
                     const preview = note.subject || (note.content.length > 120 ? note.content.slice(0, 120) + '…' : note.content);
                     return `
@@ -1492,6 +1523,7 @@
 
             notesList.hidden = false;
             loading.hidden = true;
+            renderIcons();
         }
 
         async function addNote() {
@@ -1565,7 +1597,7 @@
         // HTML for a project tag, or '' if the item has no (visible) project.
         function projectTag(id) {
             const name = projectName(id);
-            return name ? `<span class="item-project">📁 ${escapeHtml(name)}</span>` : '';
+            return name ? `<span class="item-project">${ic('folder')} ${escapeHtml(name)}</span>` : '';
         }
 
         // Does an item pass the active project filter?
@@ -1605,16 +1637,17 @@
             // Recurring pill sits right after All (Tasks tab only), then project pills.
             const pills = [{ id: 'all', name: 'All' }];
             if (activeSection === 'tasks') {
-                pills.push({ id: 'recurring', name: '🔁 Recurring' });
+                pills.push({ id: 'recurring', name: 'Recurring' });
             }
             pills.push(...projects);
             bar.innerHTML = pills.map(p => {
                 const active = String(activeProjectFilter) === String(p.id) ? ' active' : '';
                 const label = p.id === 'all' ? 'All'
-                    : p.id === 'recurring' ? '🔁 Recurring'
+                    : p.id === 'recurring' ? ic('repeat') + ' Recurring'
                     : escapeHtml(p.name);
                 return `<button class="project-pill${active}" onclick="setProjectFilter('${p.id}')">${label}</button>`;
             }).join('');
+            renderIcons();
         }
 
         function setProjectFilter(id) {
@@ -1650,11 +1683,11 @@
                 list.innerHTML = '<div class="empty-state">No projects yet. Add one to group your tasks and shopping.</div>';
             } else {
                 list.innerHTML = projects.map(project => {
-                    const privacyTag = !project.shared ? ' 🔒' : '';
+                    const privacyTag = !project.shared ? ' ' + ic('lock') : '';
                     return `
                         <div class="item">
                             <div class="item-content">
-                                <button class="item-name-btn" onclick="openModal('project', ${project.id})">📁 ${escapeHtml(project.name)}${privacyTag}</button>
+                                <button class="item-name-btn" onclick="openModal('project', ${project.id})">${ic('folder')} ${escapeHtml(project.name)}${privacyTag}</button>
                             </div>
                         </div>
                     `;
@@ -1663,6 +1696,7 @@
 
             list.hidden = false;
             loading.hidden = true;
+            renderIcons();
         }
 
         async function addProject() {
@@ -1961,13 +1995,13 @@
                     rows.push(['Due date', data.dueDate || '—']);
                 }
                 rows.push(['Project', projectName(data.project) || '—']);
-                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             } else if (type === 'shopping') {
                 rows.push(['Item', escapeHtml(data.name)]);
                 rows.push(['Category', data.category]);
                 rows.push(['Project', projectName(data.project) || '—']);
-                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             } else if (type === 'note') {
                 if (data.subject) rows.push(['Subject', escapeHtml(data.subject)]);
@@ -1977,13 +2011,13 @@
                     rows.push(['Last edited', new Date(data.lastEdited).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })]);
                 }
                 rows.push(['Project', projectName(data.project) || '—']);
-                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             } else {
                 // project
                 rows.push(['Name', escapeHtml(data.name)]);
                 if (data.description) rows.push(['Description', escapeHtml(data.description)]);
-                rows.push(['Visibility', data.shared ? 'Shared' : '🔒 Private']);
+                rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             }
 
@@ -1996,6 +2030,7 @@
 
             document.getElementById('modal-detail').hidden = false;
             document.getElementById('modal-edit').hidden = true;
+            renderIcons();
         }
 
         // ── Edit form ─────────────────────────────────────────────────────────
@@ -2299,6 +2334,9 @@
 
         // ===== INIT =====
         initializeUI();
+        // Initialise all static Lucide icons in the HTML shell
+        // (tabs, refresh btn, add/delete buttons, modal close).
+        renderIcons();
     </script>
 </body>
 </html>
