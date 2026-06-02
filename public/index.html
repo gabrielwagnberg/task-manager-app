@@ -980,6 +980,7 @@
             display: grid;
             grid-template-columns: 22px repeat(7, 1fr);
             border-right: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
         }
         .cal-week-gutter { position: relative; }
         .cal-hour-label {
@@ -1030,6 +1031,7 @@
             display: grid;
             grid-template-columns: 22px 1fr;
             border-right: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
         }
 
     </style>
@@ -2329,7 +2331,11 @@
             // Time gutter
             let gutterHtml = '';
             for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
-                gutterHtml += `<div class="cal-hour-label" style="top:${(h - HOUR_START) * HOUR_H}px">${String(h).padStart(2,'0')}</div>`;
+                const topPx = (h - HOUR_START) * HOUR_H;
+                const xform = h === HOUR_START   ? 'translateY(2px)'
+                            : h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))'
+                            : '';
+                gutterHtml += `<div class="cal-hour-label" style="top:${topPx}px${xform ? ';transform:' + xform : ''}">${String(h).padStart(2,'0')}</div>`;
             }
 
             // Hour lines
@@ -2948,7 +2954,11 @@
             // Time gutter labels (one per hour)
             let gutterHtml = '';
             for (let h = HOUR_START; h <= HOUR_END + 1; h++) {
-                gutterHtml += `<div class="cal-hour-label" style="top:${(h - HOUR_START) * HOUR_H}px">${String(h).padStart(2,'0')}</div>`;
+                const topPx = (h - HOUR_START) * HOUR_H;
+                const xform = h === HOUR_START   ? 'translateY(2px)'
+                            : h === HOUR_END + 1 ? 'translateY(calc(-100% - 1px))'
+                            : '';
+                gutterHtml += `<div class="cal-hour-label" style="top:${topPx}px${xform ? ';transform:' + xform : ''}">${String(h).padStart(2,'0')}</div>`;
             }
 
             // Day columns: hour lines + absolutely-positioned task blocks
