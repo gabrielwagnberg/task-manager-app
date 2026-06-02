@@ -407,8 +407,10 @@
             max-width: 500px;
             max-height: 90vh;
             overflow-y: auto;
+            scrollbar-width: none; /* Firefox */
             animation: slideUp 0.22s ease;
         }
+        .modal::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 
         @keyframes slideUp {
             from { transform: translateY(40px); opacity: 0; }
@@ -1159,7 +1161,7 @@
 
             <!-- Day view -->
             <div id="modal-day" hidden>
-                <button class="add-toggle-btn" onclick="openAddBlockForDay()"><i data-lucide="plus" class="icon"></i> Add Block</button>
+                <button class="add-toggle-btn" style="margin-left:22px;width:calc(100% - 22px)" onclick="openAddBlockForDay()"><i data-lucide="plus" class="icon"></i> Add Block</button>
                 <div id="modal-day-content"></div>
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
