@@ -846,9 +846,11 @@
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
             padding: 3px;
+            cursor: pointer;
         }
+        .cal-day:not(.other-month):hover { background: #f8f9ff; }
         .cal-day::-webkit-scrollbar { display: none; }
-        .cal-day.other-month { background: #fafafa; }
+        .cal-day.other-month { background: #fafafa; cursor: default; }
         .cal-day.today .cal-day-num {
             background: #2563eb;
             color: #fff;
@@ -1008,6 +1010,19 @@
         }
         .cal-time-block:hover { filter: brightness(0.93); }
 
+        /* ── Day popup (single-day view inside modal) ── */
+        .cal-day-view-allday {
+            display: grid;
+            grid-template-columns: 26px 1fr;
+            border-bottom: 2px solid #e8e8e8;
+            min-height: 26px;
+            background: #fff;
+        }
+        .cal-day-view-body {
+            display: grid;
+            grid-template-columns: 26px 1fr;
+        }
+
     </style>
 </head>
 <body>
@@ -1133,6 +1148,14 @@
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Cancel</button>
                     <button class="modal-btn modal-btn-primary" id="modal-add-submit-btn" onclick="submitAddForm()">Add</button>
+                </div>
+            </div>
+
+            <!-- Day view -->
+            <div id="modal-day" hidden>
+                <div id="modal-day-content"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
                 </div>
             </div>
         </div>
@@ -2236,6 +2259,89 @@
             else if (addModalSection === 'projects') addProject();
         }
 
+        // ── Day popup (tapping a month-view cell) ────────────────────────────
+
+        function openDayView(dateStr) {
+            document.getElementById('modal-detail').hidden = true;
+            document.getElementById('modal-edit').hidden   = true;
+            document.getElementById('modal-add').hidden    = true;
+            document.getElementById('modal-day').hidden    = false;
+            renderDayView(dateStr);
+            document.getElementById('modal-overlay').classList.add('open');
+        }
+
+        function renderDayView(dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            const dayNames   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+            const monthNames = ['January','February','March','April','May','June',
+                                'July','August','September','October','November','December'];
+            document.getElementById('modal-title').textContent =
+                `${dayNames[date.getDay()]} ${d} ${monthNames[m - 1]}`;
+
+            const today      = todayStr();
+            const HOUR_START = 6, HOUR_END = 23, HOUR_H = 52;
+            const GRID_H     = (HOUR_END - HOUR_START) * HOUR_H;
+
+            // Collect this day's tasks (same logic as week view)
+            const dayTasks = tasks.filter(t => {
+                if (t.completed) return false;
+                let taskDate = t.recurring ? t.nextDue : t.dueDate;
+                if (t.recurring && taskDate < today) taskDate = today;
+                return taskDate === dateStr && matchesProjectFilter(t);
+            }).sort((a, b) => (parseInt(a.priority) || 99) - (parseInt(b.priority) || 99));
+
+            const alldayTasks = dayTasks.filter(t => !t.startTime);
+            const timedTasks  = dayTasks.filter(t =>  t.startTime);
+
+            // All-day row (only if there are untimed tasks)
+            const alldayHtml = alldayTasks.length ? `
+                <div class="cal-day-view-allday">
+                    <div class="cal-week-gutter"></div>
+                    <div class="cal-allday-col">${
+                        alldayTasks.map(t =>
+                            `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
+                        ).join('')
+                    }</div>
+                </div>` : '';
+
+            // Time gutter
+            let gutterHtml = '';
+            for (let h = HOUR_START; h <= HOUR_END; h++) {
+                gutterHtml += `<div class="cal-hour-label" style="top:${(h - HOUR_START) * HOUR_H}px">${String(h).padStart(2,'0')}</div>`;
+            }
+
+            // Hour lines
+            let linesHtml = '';
+            for (let h = HOUR_START; h <= HOUR_END; h++) {
+                linesHtml += `<div class="cal-hour-line" style="top:${(h - HOUR_START) * HOUR_H}px"></div>`;
+            }
+
+            // Timed task blocks
+            const blocksHtml = timedTasks.map(t => {
+                const [sh, sm] = t.startTime.split(':').map(Number);
+                const [eh, em] = t.endTime
+                    ? t.endTime.split(':').map(Number) : [sh + 1, sm];
+                const topPx    = Math.max(0, (sh + sm / 60 - HOUR_START) * HOUR_H);
+                const heightPx = Math.max(18, ((eh + em / 60) - (sh + sm / 60)) * HOUR_H);
+                return `<button class="cal-task cal-time-block ${taskColourCls(t)}"
+                    style="top:${Math.min(topPx, GRID_H - 18)}px;height:${heightPx}px"
+                    onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
+            }).join('');
+
+            const isToday = dateStr === today;
+
+            document.getElementById('modal-day-content').innerHTML = `
+                ${alldayHtml}
+                <div class="cal-day-view-body">
+                    <div class="cal-week-gutter" style="height:${GRID_H}px">${gutterHtml}</div>
+                    <div class="cal-week-day-body${isToday ? ' today' : ''}" style="height:${GRID_H}px">
+                        ${linesHtml}${blocksHtml}
+                    </div>
+                </div>`;
+            renderIcons();
+        }
+
         // ===== DETAIL / EDIT MODAL =====
 
         // Currently open item: { type, data }
@@ -2258,6 +2364,7 @@
         function closeModal() {
             document.getElementById('modal-overlay').classList.remove('open');
             document.getElementById('modal-add').hidden = true;
+            document.getElementById('modal-day').hidden = true;
             modalItem = null;
             addModalSection = null;
         }
@@ -2336,8 +2443,9 @@
                 </div>
             `).join('');
 
+            document.getElementById('modal-day').hidden    = true;
             document.getElementById('modal-detail').hidden = false;
-            document.getElementById('modal-edit').hidden = true;
+            document.getElementById('modal-edit').hidden   = true;
             renderIcons();
         }
 
@@ -2749,9 +2857,9 @@
                 const isToday  = dateStr === today;
                 const dayTasks = taskMap[dateStr] || [];
                 const taskHtml = dayTasks.map(t =>
-                    `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
+                    `<button class="cal-task ${taskColourCls(t)}" onclick="event.stopPropagation();openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
                 ).join('');
-                html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
+                html += `<div class="cal-day${isToday ? ' today' : ''}" onclick="openDayView('${dateStr}')"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
             }
 
             // Trailing padding to complete the last row
@@ -2805,7 +2913,7 @@
             });
 
             // All-day row (tasks without a start time)
-            let alldayHtml = `<div class="cal-allday-gutter">all day</div>`;
+            let alldayHtml = `<div class="cal-allday-gutter"></div>`;
             days.forEach(d => {
                 const dayTasks = (taskMap[dateToStr(d)] || []).filter(t => !t.startTime);
                 alldayHtml += `<div class="cal-allday-col">${
