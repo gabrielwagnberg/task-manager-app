@@ -980,6 +980,7 @@
             display: grid;
             grid-template-columns: 22px repeat(7, 1fr);
             border-right: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
         }
         .cal-week-gutter { position: relative; }
         .cal-hour-label {
@@ -1030,6 +1031,7 @@
             display: grid;
             grid-template-columns: 22px 1fr;
             border-right: 1px solid #f0f0f0;
+            border-bottom: 1px solid #f0f0f0;
         }
 
     </style>
@@ -2301,8 +2303,8 @@
                 `${dayNames[date.getDay()]} ${d} ${monthNames[m - 1]}`;
 
             const today      = todayStr();
-            const HOUR_START = 6, HOUR_END = 23, HOUR_H = 52;
-            const GRID_H     = (HOUR_END - HOUR_START) * HOUR_H;
+            const HOUR_START = 0, HOUR_END = 23, HOUR_H = 52;
+            const GRID_H     = (HOUR_END - HOUR_START + 1) * HOUR_H;
 
             // Collect this day's tasks (same logic as week view)
             const dayTasks = tasks.filter(t => {
@@ -2904,10 +2906,10 @@
             if (!titleEl || !gridEl) return;
 
             const today      = todayStr();
-            const HOUR_START = 6;
+            const HOUR_START = 0;
             const HOUR_END   = 23;
             const HOUR_H     = 52; // px per hour
-            const GRID_H     = (HOUR_END - HOUR_START) * HOUR_H;
+            const GRID_H     = (HOUR_END - HOUR_START + 1) * HOUR_H;
 
             // Build the 7 days of this week (Mon → Sun)
             const days = Array.from({ length: 7 }, (_, i) => {
