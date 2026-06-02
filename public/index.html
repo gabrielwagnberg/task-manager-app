@@ -860,7 +860,9 @@
         }
         .cal-day.other-month .cal-day-num { color: #ccc; }
         .cal-task {
-            display: block;
+            display: flex;
+            align-items: center;
+            gap: 2px;
             width: 100%;
             font-size: 10px;
             line-height: 1.25;
@@ -872,12 +874,18 @@
             border: none;
             cursor: pointer;
             text-align: left;
-            white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
         }
         .cal-task:hover { background: #dbeafe; }
         .cal-task.overdue { background: #fff1f2; color: #be123c; }
+        .cal-task-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
+        }
+        .cal-task .icon { flex-shrink: 0; width: 9px; height: 9px; opacity: 0.65; }
         .cal-more { font-size: 10px; color: #aaa; padding: 1px 2px; }
 
     </style>
@@ -2515,9 +2523,8 @@
 
                 const taskHtml = shown.map(t => {
                     const overdueCls = dateStr < today ? ' overdue' : '';
-                    const dot = t.priority == 1 ? '<span class="pri pri-1">●</span>'
-                              : t.priority == 2 ? '<span class="pri pri-2">●</span>' : '';
-                    return `<button class="cal-task${overdueCls}" onclick="openModal('task',${t.id})">${dot}${escapeHtml(t.name)}</button>`;
+                    const recurIcon  = t.recurring ? ic('repeat') : '';
+                    return `<button class="cal-task${overdueCls}" onclick="openModal('task',${t.id})"><span class="cal-task-name">${escapeHtml(t.name)}</span>${recurIcon}</button>`;
                 }).join('') + (extra > 0 ? `<div class="cal-more">+${extra}</div>` : '');
 
                 html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
