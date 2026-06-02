@@ -2507,9 +2507,11 @@
             const taskMap = {};
             tasks.forEach(task => {
                 if (task.completed) return;
-                const date = task.recurring ? task.nextDue : task.dueDate;
+                let date = task.recurring ? task.nextDue : task.dueDate;
                 if (!date) return;
                 if (!matchesProjectFilter(task)) return;
+                // Overdue recurring tasks surface in today's cell instead of their past date
+                if (task.recurring && date < today) date = today;
                 if (!taskMap[date]) taskMap[date] = [];
                 taskMap[date].push(task);
             });
