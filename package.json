@@ -4,7 +4,7 @@
   "description": "Simple task manager synced with Google Sheets",
   "main": "index.js",
   "scripts": {
-    "dev": "netlify dev",
+    "dev": "vercel dev",
     "build": "echo 'Build complete'"
   },
   "dependencies": {
