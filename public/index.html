@@ -124,6 +124,24 @@
             padding: 0 4px;
         }
 
+        /* Mobile: icons only — hides tab labels, keeps icons + badge */
+        @media (max-width: 520px) {
+            .tab {
+                font-size: 0;
+                min-height: 40px;
+                padding: 8px 4px;
+                gap: 0;
+            }
+            .tab .icon {
+                width: 20px;
+                height: 20px;
+            }
+            .today-badge {
+                top: 2px;
+                right: 2px;
+            }
+        }
+
         /* Sub-tab Navigation (Shopping) — pill style, matches project filter bar */
         .sub-tab-nav {
             display: flex;
