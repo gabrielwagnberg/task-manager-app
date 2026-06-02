@@ -1,13 +1,13 @@
 {
   "name": "Task Manager",
-  "short_name": "Tasks",
+  "short_name": "Task Manager",
   "description": "Gabriel & Thomas's shared task manager",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f5f5",
-  "theme_color": "#ffffff",
+  "background_color": "#d2c4ff",
+  "theme_color": "#d2c4ff",
   "icons": [
     {
       "src": "/icon-180.png",
