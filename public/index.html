@@ -872,7 +872,7 @@
             margin-bottom: 1px;
             border-radius: 3px;
             background: #f9fafb;
-            color: #9ca3af;
+            color: #374151;
             border: none;
             cursor: pointer;
             text-align: left;
@@ -1962,6 +1962,7 @@
                             <option value="">— Unassigned —</option>
                             <option value="Gabriel">Gabriel</option>
                             <option value="Thomas">Thomas</option>
+                            <option value="Both">Both</option>
                         </select>
                     </div>
                     <div class="modal-field">
@@ -2215,6 +2216,7 @@
                             <option value="" ${!data.assignedTo ? 'selected' : ''}>— Unassigned —</option>
                             <option value="Gabriel" ${data.assignedTo === 'Gabriel' ? 'selected' : ''}>Gabriel</option>
                             <option value="Thomas" ${data.assignedTo === 'Thomas' ? 'selected' : ''}>Thomas</option>
+                            <option value="Both" ${data.assignedTo === 'Both' ? 'selected' : ''}>Both</option>
                         </select>
                     </div>
                     <div class="modal-field">
@@ -2538,10 +2540,11 @@
                 const dayTasks = taskMap[dateStr] || [];
                 const taskHtml = dayTasks.map(t => {
                     let cls = '';
-                    if (t.assignedTo === 'Thomas')       cls = 't-thomas';
-                    else if (t.assignedTo === 'Gabriel') cls = 't-gabriel';
-                    else if (t.recurring)                cls = 't-recurring';
-                    else if (t.shared)                   cls = 't-shared';
+                    if (t.assignedTo === 'Thomas')        cls = 't-thomas';
+                    else if (t.assignedTo === 'Gabriel')  cls = 't-gabriel';
+                    else if (t.assignedTo === 'Both')     cls = 't-shared';
+                    else if (t.recurring)                 cls = 't-recurring';
+                    else if (t.shared)                    cls = 't-shared';
                     return `<button class="cal-task ${cls}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
                 }).join('');
 
