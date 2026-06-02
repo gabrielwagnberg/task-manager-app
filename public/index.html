@@ -915,7 +915,7 @@
             background: #f7f7f7;
             min-width: 340px;
         }
-        .cal-wh-gutter { }
+        .cal-wh-gutter { min-width: 0; }
         .cal-wh-day {
             text-align: center;
             padding: 4px 0 5px;
@@ -953,10 +953,13 @@
             padding: 4px 5px 0 0;
             text-transform: uppercase;
             letter-spacing: 0.2px;
+            min-width: 0;
         }
         .cal-allday-col {
             padding: 2px 2px;
             border-left: 1px solid #f0f0f0;
+            min-width: 0;
+            overflow: hidden;
         }
         .cal-week-body {
             display: grid;
@@ -976,6 +979,7 @@
         .cal-week-day-body {
             position: relative;
             border-left: 1px solid #f0f0f0;
+            min-width: 0;
         }
         .cal-week-day-body.today { background: #fafbff; }
         .cal-hour-line {
