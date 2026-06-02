@@ -887,6 +887,115 @@
         .cal-task.t-recurring { background: #fbcfe8; color: #9d174d; }
         .cal-task.t-shared    { background: #fca5a5; color: #7f1d1d; }
 
+        /* ── View toggle (Month / Week) ── */
+        .cal-view-toggle {
+            display: flex;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-left: 8px;
+        }
+        .cal-view-btn {
+            background: none;
+            border: none;
+            padding: 5px 13px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #666;
+        }
+        .cal-view-btn.active { background: #2563eb; color: #fff; }
+
+        /* ── Week view ── */
+        .cal-week-container { width: 100%; overflow-x: auto; }
+        .cal-week-head {
+            display: grid;
+            grid-template-columns: 38px repeat(7, 1fr);
+            border-bottom: 1px solid #e8e8e8;
+            background: #f7f7f7;
+            min-width: 340px;
+        }
+        .cal-wh-gutter { }
+        .cal-wh-day {
+            text-align: center;
+            padding: 4px 0 5px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .cal-wh-day b {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            margin: 2px auto 0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        .cal-wh-day.today b { background: #2563eb; color: #fff; }
+        .cal-week-allday {
+            display: grid;
+            grid-template-columns: 38px repeat(7, 1fr);
+            border-bottom: 2px solid #e8e8e8;
+            min-height: 26px;
+            background: #fff;
+            min-width: 340px;
+        }
+        .cal-allday-gutter {
+            font-size: 8px;
+            color: #bbb;
+            text-align: right;
+            padding: 4px 5px 0 0;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+        }
+        .cal-allday-col {
+            padding: 2px 2px;
+            border-left: 1px solid #f0f0f0;
+        }
+        .cal-week-body {
+            display: grid;
+            grid-template-columns: 38px repeat(7, 1fr);
+            min-width: 340px;
+        }
+        .cal-week-gutter { position: relative; }
+        .cal-hour-label {
+            position: absolute;
+            right: 4px;
+            font-size: 8px;
+            color: #bbb;
+            transform: translateY(-50%);
+            white-space: nowrap;
+            line-height: 1;
+        }
+        .cal-week-day-body {
+            position: relative;
+            border-left: 1px solid #f0f0f0;
+        }
+        .cal-week-day-body.today { background: #fafbff; }
+        .cal-hour-line {
+            position: absolute;
+            left: 0; right: 0;
+            border-top: 1px solid #f0f0f0;
+            pointer-events: none;
+        }
+        .cal-time-block {
+            position: absolute;
+            left: 2px; right: 2px;
+            min-height: 18px;
+            overflow: hidden;
+            white-space: nowrap;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+        }
+        .cal-time-block:hover { filter: brightness(0.93); }
+
     </style>
 </head>
 <body>
@@ -967,9 +1076,13 @@
             <!-- CALENDAR SECTION -->
             <section id="section-calendar" class="section">
                 <div class="calendar-nav">
-                    <button class="calendar-nav-btn" onclick="prevMonth()"><i data-lucide="chevron-left" class="icon"></i></button>
+                    <button class="calendar-nav-btn" onclick="prevPeriod()"><i data-lucide="chevron-left" class="icon"></i></button>
                     <span id="calendar-month-title" class="calendar-month-title"></span>
-                    <button class="calendar-nav-btn" onclick="nextMonth()"><i data-lucide="chevron-right" class="icon"></i></button>
+                    <button class="calendar-nav-btn" onclick="nextPeriod()"><i data-lucide="chevron-right" class="icon"></i></button>
+                    <div class="cal-view-toggle">
+                        <button class="cal-view-btn active" data-view="month" onclick="switchCalendarView('month')">Month</button>
+                        <button class="cal-view-btn" data-view="week" onclick="switchCalendarView('week')">Week</button>
+                    </div>
                 </div>
                 <div id="calendar-grid" class="calendar-grid"></div>
             </section>
@@ -1039,6 +1152,13 @@
         let projectsLoaded = false;
         let calendarYear  = new Date().getFullYear();
         let calendarMonth = new Date().getMonth(); // 0–11
+        let calendarView  = 'month'; // 'month' | 'week'
+        let calendarWeekStart = (() => {
+            const d = new Date();
+            d.setDate(d.getDate() - (d.getDay() + 6) % 7); // rewind to Monday
+            d.setHours(0, 0, 0, 0);
+            return d;
+        })();
 
         // ===== USER SELECTION =====
 
@@ -1141,7 +1261,10 @@
 
         // Today as YYYY-MM-DD (local), for comparing against task due dates.
         function todayStr() {
-            const d = new Date();
+            return dateToStr(new Date());
+        }
+        // Convert any Date object to a YYYY-MM-DD string in local time.
+        function dateToStr(d) {
             return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         }
 
@@ -1318,11 +1441,15 @@
             const projectInput = document.getElementById('task-project');
             const priorityInput = document.getElementById('task-priority');
             const assignedToInput = document.getElementById('task-assigned-to');
+            const startTimeInput = document.getElementById('task-start-time');
+            const endTimeInput   = document.getElementById('task-end-time');
             const name = nameInput.value.trim();
             const shared = !privateCheckbox.checked; // inverted logic: unchecked = shared
             const project = projectInput.value;
             const priority = priorityInput ? priorityInput.value : '';
             const assignedTo = assignedToInput ? assignedToInput.value : '';
+            const startTime = startTimeInput ? startTimeInput.value : '';
+            const endTime   = endTimeInput   ? endTimeInput.value   : '';
 
             const recurring = recurringCheckbox.checked;
             const frequency = recurring ? (parseInt(frequencyInput.value, 10) || 1) : '';
@@ -1341,7 +1468,7 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue, startTime, endTime }),
                 });
 
                 if (response.ok) {
@@ -1983,6 +2110,14 @@
                         <input type="date" id="task-due">
                     </div>
                     <div class="modal-field">
+                        <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="time" id="task-start-time" style="flex:1">
+                            <span style="color:#aaa;font-size:13px">–</span>
+                            <input type="time" id="task-end-time" style="flex:1">
+                        </div>
+                    </div>
+                    <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                             <input type="checkbox" id="task-private">
                             <span class="modal-field-label" style="margin:0">Private</span>
@@ -2150,6 +2285,10 @@
                 } else {
                     rows.push(['Due date', data.dueDate || '—']);
                 }
+                if (data.startTime) {
+                    const timeStr = data.endTime ? `${data.startTime} – ${data.endTime}` : data.startTime;
+                    rows.push(['Time', timeStr]);
+                }
                 rows.push(['Project', projectName(data.project) || '—']);
                 rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
@@ -2235,6 +2374,14 @@
                     <div class="modal-field">
                         <div class="modal-field-label"><span id="edit-due-label-text">${dateLabel}</span> <span id="edit-due-label-note" style="font-weight:400;text-transform:none;font-size:11px">${dateLabelNote}</span></div>
                         <input type="date" id="edit-due" value="${dateValue}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="time" id="edit-start-time" value="${data.startTime || ''}" style="flex:1">
+                            <span style="color:#aaa;font-size:13px">–</span>
+                            <input type="time" id="edit-end-time" value="${data.endTime || ''}" style="flex:1">
+                        </div>
                     </div>
                     <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
@@ -2379,6 +2526,8 @@
                     recurring,
                     frequency: recurring ? (parseInt(document.getElementById('edit-frequency').value, 10) || 1) : '',
                     rate: recurring ? document.getElementById('edit-rate').value : '',
+                    startTime: document.getElementById('edit-start-time')?.value || '',
+                    endTime:   document.getElementById('edit-end-time')?.value   || '',
                 };
                 url = '/api/tasks';
                 successReload = loadTasks;
@@ -2481,19 +2630,80 @@
 
         // ===== CALENDAR =====
 
+        // ── Helpers ──────────────────────────────────────────────────────────
+
+        // Colour class for a task pill / time block.
+        function taskColourCls(t) {
+            if (t.assignedTo === 'Thomas')       return 't-thomas';
+            if (t.assignedTo === 'Gabriel')      return 't-gabriel';
+            if (t.assignedTo === 'Both')         return 't-shared';
+            if (t.recurring)                     return 't-recurring';
+            if (t.shared)                        return 't-shared';
+            return '';
+        }
+
+        // Build date→tasks map honouring project filter + overdue-recurring redirect.
+        function buildTaskMap() {
+            const today = todayStr();
+            const map = {};
+            tasks.forEach(task => {
+                if (task.completed) return;
+                let date = task.recurring ? task.nextDue : task.dueDate;
+                if (!date) return;
+                if (!matchesProjectFilter(task)) return;
+                if (task.recurring && date < today) date = today;
+                if (!map[date]) map[date] = [];
+                map[date].push(task);
+            });
+            Object.values(map).forEach(arr =>
+                arr.sort((a, b) => (parseInt(a.priority) || 99) - (parseInt(b.priority) || 99))
+            );
+            return map;
+        }
+
+        // ── Navigation ───────────────────────────────────────────────────────
+
         function prevMonth() {
             if (calendarMonth === 0) { calendarMonth = 11; calendarYear--; }
             else calendarMonth--;
             renderCalendar();
         }
-
         function nextMonth() {
             if (calendarMonth === 11) { calendarMonth = 0; calendarYear++; }
             else calendarMonth++;
             renderCalendar();
         }
+        function prevWeek() {
+            calendarWeekStart = new Date(calendarWeekStart);
+            calendarWeekStart.setDate(calendarWeekStart.getDate() - 7);
+            renderCalendar();
+        }
+        function nextWeek() {
+            calendarWeekStart = new Date(calendarWeekStart);
+            calendarWeekStart.setDate(calendarWeekStart.getDate() + 7);
+            renderCalendar();
+        }
+        function prevPeriod() { calendarView === 'week' ? prevWeek() : prevMonth(); }
+        function nextPeriod() { calendarView === 'week' ? nextWeek() : nextMonth(); }
+
+        function switchCalendarView(v) {
+            calendarView = v;
+            document.querySelectorAll('.cal-view-btn').forEach(b =>
+                b.classList.toggle('active', b.dataset.view === v)
+            );
+            renderCalendar();
+        }
+
+        // ── Dispatcher ───────────────────────────────────────────────────────
 
         function renderCalendar() {
+            if (calendarView === 'week') renderCalendarWeek();
+            else renderCalendarMonth();
+        }
+
+        // ── Month view ───────────────────────────────────────────────────────
+
+        function renderCalendarMonth() {
             const titleEl = document.getElementById('calendar-month-title');
             const gridEl  = document.getElementById('calendar-grid');
             if (!titleEl || !gridEl) return;
@@ -2503,22 +2713,7 @@
                                 'July','August','September','October','November','December'];
             titleEl.textContent = `${monthNames[calendarMonth]} ${calendarYear}`;
 
-            // Map date string → tasks visible to current user + project filter
-            const taskMap = {};
-            tasks.forEach(task => {
-                if (task.completed) return;
-                let date = task.recurring ? task.nextDue : task.dueDate;
-                if (!date) return;
-                if (!matchesProjectFilter(task)) return;
-                // Overdue recurring tasks surface in today's cell instead of their past date
-                if (task.recurring && date < today) date = today;
-                if (!taskMap[date]) taskMap[date] = [];
-                taskMap[date].push(task);
-            });
-            // Sort each day's tasks by priority
-            Object.values(taskMap).forEach(arr =>
-                arr.sort((a, b) => (parseInt(a.priority) || 99) - (parseInt(b.priority) || 99))
-            );
+            const taskMap = buildTaskMap();
 
             // Grid geometry — week starts Monday
             const daysInMonth   = new Date(calendarYear, calendarMonth + 1, 0).getDate();
@@ -2540,16 +2735,9 @@
                 const dateStr  = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const isToday  = dateStr === today;
                 const dayTasks = taskMap[dateStr] || [];
-                const taskHtml = dayTasks.map(t => {
-                    let cls = '';
-                    if (t.assignedTo === 'Thomas')        cls = 't-thomas';
-                    else if (t.assignedTo === 'Gabriel')  cls = 't-gabriel';
-                    else if (t.assignedTo === 'Both')     cls = 't-shared';
-                    else if (t.recurring)                 cls = 't-recurring';
-                    else if (t.shared)                    cls = 't-shared';
-                    return `<button class="cal-task ${cls}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
-                }).join('');
-
+                const taskHtml = dayTasks.map(t =>
+                    `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
+                ).join('');
                 html += `<div class="cal-day${isToday ? ' today' : ''}"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
             }
 
@@ -2560,7 +2748,105 @@
                 html += `<div class="cal-day other-month"><span class="cal-day-num">${d}</span></div>`;
             }
 
+            gridEl.className = 'calendar-grid';
             gridEl.innerHTML = html;
+            renderIcons();
+        }
+
+        // ── Week view ────────────────────────────────────────────────────────
+
+        function renderCalendarWeek() {
+            const titleEl = document.getElementById('calendar-month-title');
+            const gridEl  = document.getElementById('calendar-grid');
+            if (!titleEl || !gridEl) return;
+
+            const today      = todayStr();
+            const HOUR_START = 6;
+            const HOUR_END   = 23;
+            const HOUR_H     = 52; // px per hour
+            const GRID_H     = (HOUR_END - HOUR_START) * HOUR_H;
+
+            // Build the 7 days of this week (Mon → Sun)
+            const days = Array.from({ length: 7 }, (_, i) => {
+                const d = new Date(calendarWeekStart);
+                d.setDate(d.getDate() + i);
+                return d;
+            });
+
+            // Title: "2–8 June 2026" or "30 June – 6 July 2026"
+            const monthNames = ['January','February','March','April','May','June',
+                                'July','August','September','October','November','December'];
+            const s = days[0], e = days[6];
+            titleEl.textContent = s.getMonth() === e.getMonth()
+                ? `${s.getDate()}–${e.getDate()} ${monthNames[s.getMonth()]} ${s.getFullYear()}`
+                : `${s.getDate()} ${monthNames[s.getMonth()]} – ${e.getDate()} ${monthNames[e.getMonth()]} ${e.getFullYear()}`;
+
+            const taskMap  = buildTaskMap();
+            const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+            // Day header row
+            let headHtml = `<div class="cal-wh-gutter"></div>`;
+            days.forEach((d, i) => {
+                const isToday = dateToStr(d) === today;
+                headHtml += `<div class="cal-wh-day${isToday ? ' today' : ''}">${dayNames[i]}<b>${d.getDate()}</b></div>`;
+            });
+
+            // All-day row (tasks without a start time)
+            let alldayHtml = `<div class="cal-allday-gutter">all day</div>`;
+            days.forEach(d => {
+                const dayTasks = (taskMap[dateToStr(d)] || []).filter(t => !t.startTime);
+                alldayHtml += `<div class="cal-allday-col">${
+                    dayTasks.map(t =>
+                        `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
+                    ).join('')
+                }</div>`;
+            });
+
+            // Time gutter labels (one per hour)
+            let gutterHtml = '';
+            for (let h = HOUR_START; h <= HOUR_END; h++) {
+                gutterHtml += `<div class="cal-hour-label" style="top:${(h - HOUR_START) * HOUR_H}px">${String(h).padStart(2,'0')}</div>`;
+            }
+
+            // Day columns: hour lines + absolutely-positioned task blocks
+            let colsHtml = '';
+            days.forEach(d => {
+                const ds        = dateToStr(d);
+                const isToday   = ds === today;
+                const timedTasks = (taskMap[ds] || []).filter(t => t.startTime);
+
+                // Hour grid lines
+                let linesHtml = '';
+                for (let h = HOUR_START; h <= HOUR_END; h++) {
+                    linesHtml += `<div class="cal-hour-line" style="top:${(h - HOUR_START) * HOUR_H}px"></div>`;
+                }
+
+                // Timed task blocks
+                let blocksHtml = '';
+                timedTasks.forEach(t => {
+                    const [sh, sm] = t.startTime.split(':').map(Number);
+                    const [eh, em] = t.endTime
+                        ? t.endTime.split(':').map(Number)
+                        : [sh + 1, sm]; // default 1-hour block if no end time
+                    const topPx    = Math.max(0, (sh + sm / 60 - HOUR_START) * HOUR_H);
+                    const heightPx = Math.max(18, ((eh + em / 60) - (sh + sm / 60)) * HOUR_H);
+                    const clampTop = Math.min(topPx, GRID_H - 18);
+                    blocksHtml += `<button class="cal-task cal-time-block ${taskColourCls(t)}"
+                        style="top:${clampTop}px;height:${heightPx}px"
+                        onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
+                });
+
+                colsHtml += `<div class="cal-week-day-body${isToday ? ' today' : ''}" style="height:${GRID_H}px">${linesHtml}${blocksHtml}</div>`;
+            });
+
+            gridEl.className = 'cal-week-container';
+            gridEl.innerHTML = `
+                <div class="cal-week-head">${headHtml}</div>
+                <div class="cal-week-allday">${alldayHtml}</div>
+                <div class="cal-week-body">
+                    <div class="cal-week-gutter" style="height:${GRID_H}px">${gutterHtml}</div>
+                    ${colsHtml}
+                </div>`;
             renderIcons();
         }
 
