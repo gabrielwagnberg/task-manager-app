@@ -871,8 +871,8 @@
             padding: 2px 3px;
             margin-bottom: 1px;
             border-radius: 3px;
-            background: #e5e7eb;
-            color: #374151;
+            background: #f9fafb;
+            color: #9ca3af;
             border: none;
             cursor: pointer;
             text-align: left;
@@ -881,10 +881,11 @@
             text-overflow: clip;
         }
         .cal-task:hover { filter: brightness(0.93); }
-        /* colour coding by assigned person / recurring */
+        /* colour coding: assigned > recurring > shared > unassigned */
         .cal-task.t-thomas    { background: #a5b4fc; color: #1e1b4b; }
-        .cal-task.t-gabriel   { background: #fb923c; color: #431407; }
-        .cal-task.t-recurring { background: #f9a8d4; color: #831843; }
+        .cal-task.t-gabriel   { background: #fbbf24; color: #451a03; }
+        .cal-task.t-recurring { background: #fbcfe8; color: #9d174d; }
+        .cal-task.t-shared    { background: #fca5a5; color: #7f1d1d; }
 
     </style>
 </head>
@@ -2540,6 +2541,7 @@
                     if (t.assignedTo === 'Thomas')       cls = 't-thomas';
                     else if (t.assignedTo === 'Gabriel') cls = 't-gabriel';
                     else if (t.recurring)                cls = 't-recurring';
+                    else if (t.shared)                   cls = 't-shared';
                     return `<button class="cal-task ${cls}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
                 }).join('');
 
