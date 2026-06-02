@@ -31,6 +31,7 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden; /* clips week grid bleed to border-radius */
         }
 
         /* User Select Screen */
@@ -909,7 +910,13 @@
         .cal-view-btn.active { background: #2563eb; color: #fff; }
 
         /* ── Week view ── */
-        .cal-week-container { width: 100%; }
+        /* Bleed week grid to container edges, cancelling the 20px padding so
+           the gutter column sits flush left and the grid fills the full card width. */
+        .cal-week-container {
+            width: calc(100% + 40px);
+            margin-left: -20px;
+            margin-right: -20px;
+        }
         .cal-week-head {
             display: grid;
             grid-template-columns: 38px repeat(7, 1fr);
