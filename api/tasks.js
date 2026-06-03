@@ -262,12 +262,16 @@ module.exports = async (req, res) => {
       const { completed } = body;
 
       if (rowIsRecurring(row) && completed) {
-        const today = todayStr();
+        // Use the client's local date if provided; fall back to server UTC date.
+        // This prevents a timezone mismatch where the server's UTC "today" differs
+        // from the user's local calendar day (e.g. past midnight in CET but still
+        // the same UTC day — or the reverse).
+        const today = (body.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(body.clientToday))
+          ? body.clientToday
+          : todayStr();
         const rate = row.get('Rate') || 'days';
         const frequency = row.get('Frequency');
-        // Always anchor next due to today, not tomorrow or the task's current due date.
-        // This means checking a task due Saturday on Wednesday gives Wednesday + interval,
-        // not Saturday + interval — the recurrence is always relative to when you did it.
+        // Anchor to the day the user actually checked the task off, not its previous due date.
         const nextDue = computeNextDue(today, frequency, rate);
 
         row.set('Last Done', today);

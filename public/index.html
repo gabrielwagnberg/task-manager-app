@@ -130,8 +130,8 @@
             height: 16px;
             padding: 0 4px;
         }
-        /* Ensure the badge truly hides — the class's display:inline-flex would otherwise beat [hidden] */
-        .today-badge[hidden] { display: none !important; }
+        /* Ensure [hidden] always wins over any class-level display rule (inline-flex, flex, etc.) */
+        [hidden] { display: none !important; }
 
         /* Mobile: icons only — hides tab labels, keeps icons + badge */
         @media (max-width: 520px) {
@@ -1236,6 +1236,8 @@
         let birthdays      = [];   // from /api/specials
         let specialDays    = [];   // from /api/specials
         let specialsLoaded = false;
+        // Collapse state for Events tab sections (survives re-renders within a session)
+        const eventsCollapsed = { schedules: false, birthdays: false, holidays: false };
         let tasksLoaded = false;
         let shoppingLoaded = false;
         let notesLoaded = false;
@@ -1614,7 +1616,9 @@
                 const response = await fetch('/api/tasks', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id, completed }),
+                    // Send the client's local date so the server anchors recurrence to the
+                    // user's calendar day, not the UTC day (which can differ by 1–2 hours).
+                    body: JSON.stringify({ id, completed, clientToday: todayStr() }),
                 });
 
                 if (response.ok) {
@@ -2390,8 +2394,22 @@
                         </label>
                     </div>
                     <div class="modal-field" id="spec-annual-field">
-                        <div class="modal-field-label">Date (month + day — year doesn't matter)</div>
-                        <input type="date" id="spec-annual-date">
+                        <div class="modal-field-label">Date</div>
+                        <div style="display:flex;gap:8px">
+                            <select id="spec-annual-month" style="flex:1">
+                                <option value="">Month…</option>
+                                <option value="01">January</option><option value="02">February</option>
+                                <option value="03">March</option><option value="04">April</option>
+                                <option value="05">May</option><option value="06">June</option>
+                                <option value="07">July</option><option value="08">August</option>
+                                <option value="09">September</option><option value="10">October</option>
+                                <option value="11">November</option><option value="12">December</option>
+                            </select>
+                            <select id="spec-annual-day" style="flex:1">
+                                <option value="">Day…</option>
+                                ${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,'0')}">${i+1}</option>`).join('')}
+                            </select>
+                        </div>
                     </div>
                     <div class="modal-field" id="spec-onetime-field" hidden>
                         <div class="modal-field-label">Date</div>
@@ -3365,6 +3383,11 @@
             return `${monthNames[parseInt(parts[0]) - 1]} ${parseInt(parts[1])}`;
         }
 
+        function toggleEventsSection(key) {
+            eventsCollapsed[key] = !eventsCollapsed[key];
+            renderSchedulesList();
+        }
+
         function renderSchedulesList() {
             const titleEl = document.getElementById('calendar-month-title');
             const gridEl  = document.getElementById('calendar-grid');
@@ -3372,11 +3395,26 @@
             titleEl.textContent = 'Events';
             gridEl.className    = '';
 
-            // ── Schedule blocks ──
+            // Helper: clickable section header with collapse chevron
+            const sectionLabel = (key, text, count) => {
+                const collapsed = eventsCollapsed[key];
+                const countBadge = count > 0 ? ` <span style="font-weight:400;font-size:10px;background:#e0e0e0;border-radius:10px;padding:0 6px;margin-left:4px">${count}</span>` : '';
+                return `<div onclick="toggleEventsSection('${key}')"
+                    style="font-size:11px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.06em;
+                           margin:16px 0 6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                    <span>${text}${countBadge}</span>
+                    ${ic(collapsed ? 'chevron-right' : 'chevron-down')}
+                </div>`;
+            };
+
+            // ── Schedule blocks (apply project filter) ──
+            const visibleSchedules = activeProjectFilter === 'all'
+                ? schedules
+                : schedules.filter(s => matchesProjectFilter(s));
             const schedAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('schedules')" style="margin-bottom:8px">${ic('plus')} Add Schedule</button>`;
-            const schedItemsHtml = schedules.length === 0
-                ? '<div class="empty-state" style="margin-bottom:12px">No schedules yet.</div>'
-                : schedules.map(s => {
+            const schedItemsHtml = visibleSchedules.length === 0
+                ? `<div class="empty-state" style="margin-bottom:12px">${schedules.length === 0 ? 'No schedules yet.' : 'No schedules in this project.'}</div>`
+                : visibleSchedules.map(s => {
                     const freq = parseInt(s.frequency) || 1;
                     const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
                     const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
@@ -3399,10 +3437,7 @@
                     const dateLabel = b.date ? formatMonthDay(b.date) : '—';
                     return `<div class="item">
                         <div class="item-content">
-                            <div style="display:flex;align-items:center;gap:6px;font-size:15px">
-                                <span style="background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">Birthday</span>
-                                ${escapeHtml(b.name)}
-                            </div>
+                            <div style="font-size:15px">${escapeHtml(b.name)}</div>
                             <div class="item-meta">${dateLabel}${b.notes ? ' · ' + escapeHtml(b.notes) : ''}</div>
                         </div>
                         <button onclick="deleteBirthday(${b.id})" title="Delete"
@@ -3419,10 +3454,7 @@
                     const dateLabel   = isRecurring ? formatMonthDay(s.date) + ' (annual)' : s.date;
                     return `<div class="item">
                         <div class="item-content">
-                            <div style="display:flex;align-items:center;gap:6px;font-size:15px">
-                                <span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">${isRecurring ? 'Annual' : 'Once'}</span>
-                                ${escapeHtml(s.name)}
-                            </div>
+                            <div style="font-size:15px">${escapeHtml(s.name)}</div>
                             <div class="item-meta">${dateLabel}${s.notes ? ' · ' + escapeHtml(s.notes) : ''}</div>
                         </div>
                         <button onclick="deleteSpecialDay(${s.id})" title="Delete"
@@ -3430,13 +3462,16 @@
                     </div>`;
                 }).join('');
 
-            const sectionLabel = (text) =>
-                `<div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 6px">${text}</div>`;
+            const wrap = (key, content) =>
+                eventsCollapsed[key] ? '' : content;
 
             gridEl.innerHTML =
-                sectionLabel('Schedule Blocks') + schedAddBtn + schedItemsHtml +
-                sectionLabel('Birthdays')        + bdayAddBtn  + bdayItemsHtml  +
-                sectionLabel('Holidays & Red Days') + specAddBtn + specItemsHtml;
+                sectionLabel('schedules', 'Schedule Blocks', visibleSchedules.length) +
+                wrap('schedules', schedAddBtn + schedItemsHtml) +
+                sectionLabel('birthdays', 'Birthdays', birthdays.length) +
+                wrap('birthdays', bdayAddBtn + bdayItemsHtml) +
+                sectionLabel('holidays', 'Holidays & Red Days', specialDays.length) +
+                wrap('holidays', specAddBtn + specItemsHtml);
 
             renderIcons();
         }
@@ -3826,10 +3861,10 @@
             if (!name) { alert('Name is required'); return; }
             let date;
             if (recurring) {
-                const dateVal = document.getElementById('spec-annual-date')?.value || '';
-                if (!dateVal) { alert('Date is required'); return; }
-                const parts = dateVal.split('-');
-                date = `${parts[1]}-${parts[2]}`;
+                const month = document.getElementById('spec-annual-month')?.value || '';
+                const day   = document.getElementById('spec-annual-day')?.value   || '';
+                if (!month || !day) { alert('Month and day are required'); return; }
+                date = `${month}-${day}`;
             } else {
                 date = document.getElementById('spec-onetime-date')?.value || '';
                 if (!date) { alert('Date is required'); return; }
