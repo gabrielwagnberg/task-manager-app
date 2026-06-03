@@ -55,14 +55,19 @@ function isOccurrence(s, dateStr) {
 }
 
 // ── Data fetch ────────────────────────────────────────────────────────────────
+// NOTE: Scriptable's Request.loadJSON() does not work with Promise.all().
+//       Each request must be awaited individually and sequentially.
 async function fetchAll() {
     try {
-        const reqs = [
-            new Request(`${API_URL}/tasks?user=${encodeURIComponent(USER)}`),
-            new Request(`${API_URL}/schedules?user=${encodeURIComponent(USER)}`),
-            new Request(`${API_URL}/specials?user=${encodeURIComponent(USER)}`),
-        ];
-        const [tasks, schedData, specData] = await Promise.all(reqs.map(r => r.loadJSON()));
+        const tasksReq = new Request(`${API_URL}/tasks?user=${encodeURIComponent(USER)}`);
+        const tasks = await tasksReq.loadJSON();
+
+        const schedsReq = new Request(`${API_URL}/schedules?user=${encodeURIComponent(USER)}`);
+        const schedData = await schedsReq.loadJSON();
+
+        const specialsReq = new Request(`${API_URL}/specials?user=${encodeURIComponent(USER)}`);
+        const specData = await specialsReq.loadJSON();
+
         return {
             tasks,
             schedules:   schedData.schedules  || [],

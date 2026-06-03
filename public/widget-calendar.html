@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Task Manager — Calendar Widget</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg:       #ffffff;
+            --bg-cell:  #ffffff;
+            --bg-other: #f9f9f9;
+            --bg-today: #eff6ff;
+            --grid-gap: #e5e5e5;
+            --text:     #1a1a1a;
+            --muted:    #aaaaaa;
+            --header-border: #f0f0f0;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg:       #1c1c1e;
+                --bg-cell:  #1c1c1e;
+                --bg-other: #2a2a2c;
+                --bg-today: #1e3a5f;
+                --grid-gap: #3a3a3c;
+                --text:     #f0f0f0;
+                --muted:    #888888;
+                --header-border: #2c2c2e;
+            }
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            user-select: none;
+        }
+
+        .widget {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Header ─────────────────────────────────────────────────────────── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 10px 5px;
+            border-bottom: 1px solid var(--header-border);
+            flex-shrink: 0;
+        }
+        .title {
+            font-weight: 700;
+            font-size: 13px;
+            color: var(--text);
+        }
+        .user-label {
+            font-size: 10px;
+            color: var(--muted);
+        }
+
+        /* ── Calendar grid ───────────────────────────────────────────────────── */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background: var(--grid-gap);
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Day-of-week header row */
+        .dh {
+            background: var(--bg-other);
+            text-align: center;
+            font-size: 8px;
+            font-weight: 700;
+            color: var(--muted);
+            padding: 3px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Day cell */
+        .dc {
+            background: var(--bg-cell);
+            padding: 2px 3px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            overflow: hidden;
+        }
+        .dc.other     { background: var(--bg-other); }
+        .dc.today-cell { background: var(--bg-today); }
+
+        /* Day number */
+        .dn {
+            font-size: 9px;
+            font-weight: 500;
+            color: var(--text);
+            line-height: 1;
+            min-width: 14px;
+            text-align: center;
+        }
+        .dc.other .dn { color: var(--muted); }
+        .dn.today-num {
+            background: #2563eb;
+            color: #ffffff;
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 8px;
+        }
+
+        /* Coloured dots */
+        .dots {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1px;
+            margin-top: 2px;
+        }
+        .dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="widget" id="widget">
+    <div class="header">
+        <span class="title" id="title">Loading…</span>
+        <span class="user-label" id="user-label"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+</div>
+
+<script>
+    // ── Config ──────────────────────────────────────────────────────────────────
+    const params   = new URLSearchParams(location.search);
+    const USER     = params.get('user') || 'Gabriel';
+    const BASE_URL = 'https://task-manager-app-iota-puce.vercel.app';
+    const API      = BASE_URL + '/api';
+    const OPEN_URL = BASE_URL + '?tab=calendar';
+
+    document.getElementById('user-label').textContent = USER;
+    document.body.onclick = () => { window.location = OPEN_URL; };
+
+    // ── Date helpers ────────────────────────────────────────────────────────────
+    function pad(n) { return String(n).padStart(2, '0'); }
+
+    function todayStr() {
+        const d = new Date();
+        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    }
+
+    function isOccurrence(s, dateStr) {
+        if (!s.seriesStart || dateStr < s.seriesStart) return false;
+        if (s.seriesEnd && dateStr > s.seriesEnd) return false;
+        const pd = str => { const [y,m,d] = str.split('-').map(Number); return new Date(y,m-1,d); };
+        const diff = Math.round((pd(dateStr) - pd(s.seriesStart)) / 86400000);
+        if (diff < 0) return false;
+        const f = parseInt(s.frequency) || 1;
+        if (s.rate === 'days')  return diff % f === 0;
+        if (s.rate === 'weeks') return diff % (f * 7) === 0;
+        const st = pd(s.seriesStart), ch = pd(dateStr);
+        const md = (ch.getFullYear() - st.getFullYear()) * 12 + ch.getMonth() - st.getMonth();
+        return md % f === 0 && ch.getDate() === st.getDate();
+    }
+
+    // ── Build per-day dot colours ───────────────────────────────────────────────
+    function buildDayDots(data, year, month, daysInMonth, today) {
+        const result = {};
+        for (let d = 1; d <= daysInMonth; d++) {
+            const ds = `${year}-${pad(month+1)}-${pad(d)}`;
+            const md = `${pad(month+1)}-${pad(d)}`;
+            const dots = [];
+
+            // Birthdays — amber/yellow
+            data.birthdays.forEach(b => {
+                if (b.date === md) dots.push('#f59e0b');
+            });
+
+            // Special days / holidays — mint green
+            data.specialDays.forEach(s => {
+                const match = (s.recurring === true || s.recurring === 'true')
+                    ? s.date === md
+                    : s.date === ds;
+                if (match) dots.push('#10b981');
+            });
+
+            // Schedule blocks — purple
+            data.schedules.forEach(s => {
+                if (!isOccurrence(s, ds)) return;
+                const ov = data.overrides.find(o =>
+                    String(o.scheduleId) === String(s.id) && o.originalDate === ds);
+                if (ov && ov.overrideType === 'cancelled') return;
+                dots.push('#7c3aed');
+            });
+
+            // Tasks — colour by assignedTo / shared / recurring
+            data.tasks.forEach(t => {
+                if (t.completed) return;
+                let date = t.recurring ? t.nextDue : t.dueDate;
+                if (!date) return;
+                if (t.recurring && date < today) date = today; // overdue → pin to today
+                if (date !== ds) return;
+                const color = t.assignedTo === 'Thomas'  ? '#818cf8'
+                            : t.assignedTo === 'Gabriel' ? '#fbbf24'
+                            : t.shared                   ? '#f87171'
+                            : t.recurring                ? '#f9a8d4'
+                            :                              '#d1d5db';
+                dots.push(color);
+            });
+
+            result[d] = dots.slice(0, 4); // cap at 4 dots per cell
+        }
+        return result;
+    }
+
+    // ── Render calendar ─────────────────────────────────────────────────────────
+    function renderCalendar(data) {
+        const now          = new Date();
+        const year         = now.getFullYear();
+        const month        = now.getMonth();
+        const daysInMonth  = new Date(year, month + 1, 0).getDate();
+        const firstDow     = new Date(year, month, 1).getDay();
+        const startPad     = (firstDow + 6) % 7;   // Mon=0 … Sun=6
+        const prevDays     = new Date(year, month, 0).getDate();
+        const today        = todayStr();
+
+        const MONTH_NAMES = ['January','February','March','April','May','June',
+                             'July','August','September','October','November','December'];
+        document.getElementById('title').textContent = `${MONTH_NAMES[month]} ${year}`;
+
+        const dayDots = buildDayDots(data, year, month, daysInMonth, today);
+
+        const DAY_LABELS = ['M','T','W','T','F','S','S'];
+        let html = DAY_LABELS.map(l => `<div class="dh">${l}</div>`).join('');
+
+        // Leading padding (prev month tail)
+        for (let i = startPad - 1; i >= 0; i--) {
+            html += `<div class="dc other"><span class="dn">${prevDays - i}</span></div>`;
+        }
+
+        // Current month
+        for (let d = 1; d <= daysInMonth; d++) {
+            const ds      = `${year}-${pad(month+1)}-${pad(d)}`;
+            const isToday = ds === today;
+            const dots    = (dayDots[d] || []);
+            const dotHtml = dots.map(c =>
+                `<span class="dot" style="background:${c}"></span>`
+            ).join('');
+            html += `
+                <div class="dc${isToday ? ' today-cell' : ''}">
+                    <span class="dn${isToday ? ' today-num' : ''}">${d}</span>
+                    <div class="dots">${dotHtml}</div>
+                </div>`;
+        }
+
+        // Trailing padding
+        const total    = startPad + daysInMonth;
+        const trailing = (7 - (total % 7)) % 7;
+        for (let d = 1; d <= trailing; d++) {
+            html += `<div class="dc other"><span class="dn">${d}</span></div>`;
+        }
+
+        document.getElementById('grid').innerHTML = html;
+    }
+
+    // ── Fetch & render ──────────────────────────────────────────────────────────
+    async function load() {
+        try {
+            const [tasks, schedData, specData] = await Promise.all([
+                fetch(`${API}/tasks?user=${encodeURIComponent(USER)}`).then(r => r.json()),
+                fetch(`${API}/schedules?user=${encodeURIComponent(USER)}`).then(r => r.json()),
+                fetch(`${API}/specials?user=${encodeURIComponent(USER)}`).then(r => r.json()),
+            ]);
+            renderCalendar({
+                tasks,
+                schedules:   schedData.schedules  || [],
+                overrides:   schedData.overrides  || [],
+                birthdays:   specData.birthdays   || [],
+                specialDays: specData.specialDays || [],
+            });
+        } catch (e) {
+            document.getElementById('title').textContent = '⚠ Could not load';
+        }
+    }
+
+    load();
+    setInterval(load, 15 * 60 * 1000); // refresh every 15 minutes
+</script>
+</body>
+</html>
