@@ -895,7 +895,10 @@
         .cal-task.t-recurring { background: #fbcfe8; color: #9d174d; }
         .cal-task.t-shared    { background: #fca5a5; color: #7f1d1d; }
 
-        /* ── View toggle (Month / Week) ── */
+        /* Schedule pill visual distinction (italic label, subtle left accent) */
+        .cal-task.is-schedule { font-style: italic; border-left: 2px solid rgba(0,0,0,0.18); }
+
+        /* ── View toggle (Month / Week / Schedules) ── */
         .cal-view-toggle {
             display: flex;
             border: 1px solid #e0e0e0;
@@ -1120,6 +1123,7 @@
                     <div class="cal-view-toggle">
                         <button class="cal-view-btn active" data-view="month" onclick="switchCalendarView('month')">Month</button>
                         <button class="cal-view-btn" data-view="week" onclick="switchCalendarView('week')">Week</button>
+                        <button class="cal-view-btn" data-view="schedules" onclick="switchCalendarView('schedules')">Schedules</button>
                     </div>
                 </div>
                 <div id="calendar-grid" class="calendar-grid"></div>
@@ -1170,6 +1174,26 @@
                     <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
                 </div>
             </div>
+
+            <!-- Schedule block modal (tapping a schedule in the calendar) -->
+            <div id="modal-schedule" hidden>
+                <div class="detail-rows" id="modal-schedule-rows"></div>
+                <!-- Instance-level actions — hidden when opened from the Schedules list -->
+                <div id="modal-sched-instance-actions">
+                    <div class="modal-actions" style="margin-bottom:8px">
+                        <button class="modal-btn modal-btn-secondary" onclick="scheduleEditThisDay()">Edit this day</button>
+                        <button class="modal-btn modal-btn-danger" onclick="scheduleCancelThisDay()">Cancel this day</button>
+                    </div>
+                    <div class="modal-actions" style="margin-bottom:8px">
+                        <button class="modal-btn modal-btn-secondary" style="flex:1" onclick="scheduleEditFromHere()">Edit from here onwards</button>
+                    </div>
+                </div>
+                <!-- Series-level actions — always shown -->
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="scheduleEditSeries()">Edit series</button>
+                    <button class="modal-btn modal-btn-danger" onclick="scheduleDeleteSeries()">Delete series</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1197,6 +1221,10 @@
         let shoppingLoaded = false;
         let notesLoaded = false;
         let projectsLoaded = false;
+        let schedulesLoaded = false;
+        let schedules = [];
+        let scheduleOverrides = [];
+        let modalSchedule = null; // { schedule, dateStr } — set when schedule modal is open
         let calendarYear  = new Date().getFullYear();
         let calendarMonth = new Date().getMonth(); // 0–11
         let calendarView  = 'month'; // 'month' | 'week'
@@ -1224,8 +1252,9 @@
                 _fb.classList.toggle('visible', activeSection === 'tasks' || activeSection === 'shopping');
 
                 // Load projects first (needed for the filter bar, dropdowns,
-                // and project tags on tasks), then tasks.
+                // and project tags on tasks), then tasks. Schedules load in parallel.
                 loadProjects().then(loadTasks);
+                loadSchedules();
             }
         }
 
@@ -1244,6 +1273,7 @@
             try {
                 await loadProjects();
                 await loadTasks();
+                await loadSchedules();
                 if (shoppingLoaded) await loadShopping();
                 if (notesLoaded) await loadNotes();
             } finally {
@@ -2104,8 +2134,8 @@
 
         let addModalSection = null;
 
-        const addModalTitles  = { tasks: 'New Task',    shopping: 'New Item',    notes: 'New Note',    projects: 'New Project' };
-        const addModalBtnText = { tasks: 'Add Task',    shopping: 'Add Item',    notes: 'Add Note',    projects: 'Add Project' };
+        const addModalTitles  = { tasks: 'New Task', shopping: 'New Item', notes: 'New Note', projects: 'New Project', schedules: 'New Schedule' };
+        const addModalBtnText = { tasks: 'Add Task', shopping: 'Add Item', notes: 'Add Note', projects: 'Add Project', schedules: 'Add Schedule' };
 
         function openAddModal(section) {
             addModalSection = section;
@@ -2229,6 +2259,60 @@
                         </label>
                     </div>
                 `;
+            } else if (section === 'schedules') {
+                const today = todayStr();
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="sched-name" placeholder="e.g. Stephan session" autocomplete="off">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Assign to</div>
+                        <select id="sched-assigned-to">
+                            <option value="">— Unassigned —</option>
+                            <option value="Gabriel">Gabriel</option>
+                            <option value="Thomas">Thomas</option>
+                            <option value="Both">Both</option>
+                        </select>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Time</div>
+                        <div style="display:flex;gap:8px;align-items:center">
+                            <input type="time" id="sched-start-time" step="300" style="flex:1">
+                            <span style="color:#aaa;font-size:13px">–</span>
+                            <input type="time" id="sched-end-time" step="300" style="flex:1">
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Repeat every</div>
+                        <div class="modal-recur-row">
+                            <input type="number" id="sched-frequency" min="1" value="1">
+                            <select id="sched-rate">
+                                <option value="days">days</option>
+                                <option value="weeks" selected>weeks</option>
+                                <option value="months">months</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Starting from</div>
+                        <input type="date" id="sched-series-start" value="${today}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Ending <span style="font-weight:400;text-transform:none;font-size:11px">(optional — leave blank for no end)</span></div>
+                        <input type="date" id="sched-series-end">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Project</div>
+                        <select id="sched-project">${projOptions}</select>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="sched-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
             } else {
                 // projects
                 form.innerHTML = `
@@ -2266,10 +2350,11 @@
         }
 
         function submitAddForm() {
-            if (addModalSection === 'tasks')    addTask();
-            else if (addModalSection === 'shopping') addShoppingItem();
-            else if (addModalSection === 'notes')    addNote();
-            else if (addModalSection === 'projects') addProject();
+            if (addModalSection === 'tasks')       addTask();
+            else if (addModalSection === 'shopping')   addShoppingItem();
+            else if (addModalSection === 'notes')      addNote();
+            else if (addModalSection === 'projects')   addProject();
+            else if (addModalSection === 'schedules')  addSchedule();
         }
 
         // ── Day popup (tapping a month-view cell) ────────────────────────────
@@ -2314,14 +2399,20 @@
                 return taskDate === dateStr && matchesProjectFilter(t);
             }).sort((a, b) => (parseInt(a.priority) || 99) - (parseInt(b.priority) || 99));
 
-            const alldayTasks = dayTasks.filter(t => !t.startTime);
-            const timedTasks  = dayTasks.filter(t =>  t.startTime);
+            const alldayTasks  = dayTasks.filter(t => !t.startTime);
+            const timedTasks   = dayTasks.filter(t =>  t.startTime);
+            const schedBlocks  = getScheduleBlocks(dateStr);
+            const schedAllday  = schedBlocks.filter(s => !s.startTime);
+            const schedTimed   = schedBlocks.filter(s =>  s.startTime);
 
-            // All-day row (only if there are untimed tasks)
-            const alldayHtml = alldayTasks.length ? `
+            // All-day row (schedule all-days + untimed tasks)
+            const alldayHtml = (schedAllday.length || alldayTasks.length) ? `
                 <div class="cal-day-view-allday">
                     <div class="cal-week-gutter"></div>
                     <div class="cal-allday-col">${
+                        schedAllday.map(s =>
+                            `<button class="cal-task is-schedule ${scheduleColourCls(s)}" onclick="openScheduleModal(${s.id},'${dateStr}')">${escapeHtml(s.name)}</button>`
+                        ).join('') +
                         alldayTasks.map(t =>
                             `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
                         ).join('')
@@ -2342,8 +2433,8 @@
                 linesHtml += `<div class="cal-hour-line" style="top:${(h - HOUR_START) * HOUR_H}px"></div>`;
             }
 
-            // Timed task blocks
-            const blocksHtml = timedTasks.map(t => {
+            // Timed task blocks + timed schedule blocks
+            let blocksHtml = timedTasks.map(t => {
                 const [sh, sm] = t.startTime.split(':').map(Number);
                 const [eh, em] = t.endTime
                     ? t.endTime.split(':').map(Number) : [sh + 1, sm];
@@ -2353,6 +2444,15 @@
                     style="top:${Math.min(topPx, GRID_H - 18)}px;height:${heightPx}px"
                     onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
             }).join('');
+            schedTimed.forEach(s => {
+                const [sh, sm] = s.startTime.split(':').map(Number);
+                const [eh, em] = s.endTime ? s.endTime.split(':').map(Number) : [sh + 1, sm];
+                const topPx    = Math.max(0, (sh + sm / 60 - HOUR_START) * HOUR_H);
+                const heightPx = Math.max(18, ((eh + em / 60) - (sh + sm / 60)) * HOUR_H);
+                blocksHtml += `<button class="cal-task cal-time-block is-schedule ${scheduleColourCls(s)}"
+                    style="top:${Math.min(topPx, GRID_H - 18)}px;height:${heightPx}px"
+                    onclick="openScheduleModal(${s.id},'${dateStr}')">${escapeHtml(s.name)}</button>`;
+            });
 
             const isToday = dateStr === today;
 
@@ -2389,9 +2489,11 @@
 
         function closeModal() {
             document.getElementById('modal-overlay').classList.remove('open');
-            document.getElementById('modal-add').hidden = true;
-            document.getElementById('modal-day').hidden = true;
-            modalItem = null;
+            document.getElementById('modal-add').hidden      = true;
+            document.getElementById('modal-day').hidden      = true;
+            document.getElementById('modal-schedule').hidden = true;
+            modalItem      = null;
+            modalSchedule  = null;
             addModalSection = null;
         }
 
@@ -2838,14 +2940,19 @@
             document.querySelectorAll('.cal-view-btn').forEach(b =>
                 b.classList.toggle('active', b.dataset.view === v)
             );
+            // Hide ← → nav when in Schedules view (no pagination needed)
+            document.querySelectorAll('.calendar-nav-btn').forEach(b =>
+                b.style.visibility = v === 'schedules' ? 'hidden' : ''
+            );
             renderCalendar();
         }
 
         // ── Dispatcher ───────────────────────────────────────────────────────
 
         function renderCalendar() {
-            if (calendarView === 'week') renderCalendarWeek();
-            else renderCalendarMonth();
+            if (calendarView === 'week')      renderCalendarWeek();
+            else if (calendarView === 'schedules') renderSchedulesList();
+            else                              renderCalendarMonth();
         }
 
         // ── Month view ───────────────────────────────────────────────────────
@@ -2881,11 +2988,16 @@
             for (let d = 1; d <= daysInMonth; d++) {
                 const dateStr  = `${calendarYear}-${String(calendarMonth + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
                 const isToday  = dateStr === today;
+                // Schedule blocks first (bold/priority), then tasks
+                const schedBlocks = getScheduleBlocks(dateStr);
+                const schedHtml   = schedBlocks.map(s =>
+                    `<button class="cal-task is-schedule ${scheduleColourCls(s)}" onclick="event.stopPropagation();openScheduleModal(${s.id},'${dateStr}')">${escapeHtml(s.name)}</button>`
+                ).join('');
                 const dayTasks = taskMap[dateStr] || [];
                 const taskHtml = dayTasks.map(t =>
                     `<button class="cal-task ${taskColourCls(t)}" onclick="event.stopPropagation();openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
                 ).join('');
-                html += `<div class="cal-day${isToday ? ' today' : ''}" onclick="openDayView('${dateStr}')"><span class="cal-day-num">${d}</span>${taskHtml}</div>`;
+                html += `<div class="cal-day${isToday ? ' today' : ''}" onclick="openDayView('${dateStr}')"><span class="cal-day-num">${d}</span>${schedHtml}${taskHtml}</div>`;
             }
 
             // Trailing padding to complete the last row
@@ -2938,11 +3050,16 @@
                 headHtml += `<div class="cal-wh-day${isToday ? ' today' : ''}">${dayNames[i]}<b>${d.getDate()}</b></div>`;
             });
 
-            // All-day row (tasks without a start time)
+            // All-day row (schedule blocks without a start time + untimed tasks)
             let alldayHtml = `<div class="cal-allday-gutter"></div>`;
             days.forEach(d => {
-                const dayTasks = (taskMap[dateToStr(d)] || []).filter(t => !t.startTime);
+                const ds = dateToStr(d);
+                const schedAllday = getScheduleBlocks(ds).filter(s => !s.startTime);
+                const dayTasks    = (taskMap[ds] || []).filter(t => !t.startTime);
                 alldayHtml += `<div class="cal-allday-col">${
+                    schedAllday.map(s =>
+                        `<button class="cal-task is-schedule ${scheduleColourCls(s)}" onclick="openScheduleModal(${s.id},'${ds}')">${escapeHtml(s.name)}</button>`
+                    ).join('') +
                     dayTasks.map(t =>
                         `<button class="cal-task ${taskColourCls(t)}" onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
                     ).join('')
@@ -2985,6 +3102,17 @@
                         onclick="openModal('task',${t.id})">${escapeHtml(t.name)}</button>`;
                 });
 
+                // Timed schedule blocks (rendered on top of task blocks, same column)
+                getScheduleBlocks(ds).filter(s => s.startTime).forEach(s => {
+                    const [sh, sm] = s.startTime.split(':').map(Number);
+                    const [eh, em] = s.endTime ? s.endTime.split(':').map(Number) : [sh + 1, sm];
+                    const topPx    = Math.max(0, (sh + sm / 60 - HOUR_START) * HOUR_H);
+                    const heightPx = Math.max(18, ((eh + em / 60) - (sh + sm / 60)) * HOUR_H);
+                    blocksHtml += `<button class="cal-task cal-time-block is-schedule ${scheduleColourCls(s)}"
+                        style="top:${Math.min(topPx, GRID_H - 18)}px;height:${heightPx}px"
+                        onclick="openScheduleModal(${s.id},'${ds}')">${escapeHtml(s.name)}</button>`;
+                });
+
                 colsHtml += `<div class="cal-week-day-body${isToday ? ' today' : ''}" style="height:${GRID_H}px">${linesHtml}${blocksHtml}</div>`;
             });
 
@@ -2997,6 +3125,440 @@
                     ${colsHtml}
                 </div>`;
             renderIcons();
+        }
+
+        // ===== SCHEDULES =====
+
+        // ── Data helpers ─────────────────────────────────────────────────────
+
+        async function loadSchedules() {
+            try {
+                const res = await fetch(`/api/schedules?user=${encodeURIComponent(currentUser)}`);
+                const data = await res.json();
+                schedules       = data.schedules  || [];
+                scheduleOverrides = data.overrides || [];
+                schedulesLoaded = true;
+                if (activeSection === 'calendar') renderCalendar();
+            } catch (e) {
+                console.error('Error loading schedules:', e);
+            }
+        }
+
+        // Returns true if schedule series produces an occurrence on dateStr (YYYY-MM-DD).
+        function isOccurrence(sched, dateStr) {
+            if (!sched.seriesStart || dateStr < sched.seriesStart) return false;
+            if (sched.seriesEnd && dateStr > sched.seriesEnd) return false;
+            const parseD = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); };
+            const diffDays = Math.round((parseD(dateStr) - parseD(sched.seriesStart)) / 86400000);
+            if (diffDays < 0) return false;
+            const freq = parseInt(sched.frequency) || 1;
+            if (sched.rate === 'days')   return diffDays % freq === 0;
+            if (sched.rate === 'weeks')  return diffDays % (freq * 7) === 0;
+            if (sched.rate === 'months') {
+                const [sy,sm,sd] = sched.seriesStart.split('-').map(Number);
+                const [dy,dm,dd] = dateStr.split('-').map(Number);
+                if (dd !== sd) return false;
+                const mDiff = (dy - sy) * 12 + (dm - sm);
+                return mDiff >= 0 && mDiff % freq === 0;
+            }
+            return false;
+        }
+
+        // Returns all schedule blocks that fall on dateStr, with overrides applied.
+        function getScheduleBlocks(dateStr) {
+            const blocks = [];
+            schedules.forEach(s => {
+                if (!isOccurrence(s, dateStr)) return;
+                const ov = scheduleOverrides.find(o => String(o.scheduleId) === String(s.id) && o.originalDate === dateStr);
+                if (ov) {
+                    if (ov.overrideType === 'cancelled') return;
+                    if (ov.overrideType === 'modified') {
+                        blocks.push({ ...s, startTime: ov.newStartTime || s.startTime, endTime: ov.newEndTime || s.endTime, isOverridden: true, overrideId: ov.id, originalDate: dateStr });
+                        return;
+                    }
+                }
+                blocks.push({ ...s, originalDate: dateStr });
+            });
+            return blocks;
+        }
+
+        function scheduleColourCls(s) {
+            if (s.assignedTo === 'Thomas')  return 't-thomas';
+            if (s.assignedTo === 'Gabriel') return 't-gabriel';
+            if (s.assignedTo === 'Both')    return 't-shared';
+            return 't-recurring';
+        }
+
+        // ── Schedules list view (calendarView === 'schedules') ───────────────
+
+        function renderSchedulesList() {
+            const titleEl = document.getElementById('calendar-month-title');
+            const gridEl  = document.getElementById('calendar-grid');
+            if (!titleEl || !gridEl) return;
+            titleEl.textContent = 'Schedules';
+            gridEl.className    = '';
+
+            const addBtn = `<button class="add-toggle-btn" onclick="openAddModal('schedules')" style="margin-bottom:12px">${ic('plus')} Add Schedule</button>`;
+
+            if (schedules.length === 0) {
+                gridEl.innerHTML = addBtn + '<div class="empty-state">No schedules yet.</div>';
+                renderIcons();
+                return;
+            }
+
+            gridEl.innerHTML = addBtn + schedules.map(s => {
+                const freq = parseInt(s.frequency) || 1;
+                const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
+                const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
+                const privacyTag = !s.shared ? ' ' + ic('lock') : '';
+                return `<div class="item">
+                    <div class="item-content">
+                        <button class="item-name-btn" onclick="openScheduleSeriesModal(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
+                        <div class="item-meta">${timeStr} · Every ${freq} ${unit}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
+                    </div>
+                </div>`;
+            }).join('');
+            renderIcons();
+        }
+
+        // ── Add schedule ─────────────────────────────────────────────────────
+
+        async function addSchedule() {
+            const name       = (document.getElementById('sched-name')?.value || '').trim();
+            const assignedTo = document.getElementById('sched-assigned-to')?.value || '';
+            const startTime  = document.getElementById('sched-start-time')?.value || '';
+            const endTime    = document.getElementById('sched-end-time')?.value || '';
+            const frequency  = parseInt(document.getElementById('sched-frequency')?.value) || 1;
+            const rate       = document.getElementById('sched-rate')?.value || 'weeks';
+            const seriesStart = document.getElementById('sched-series-start')?.value || '';
+            const seriesEnd   = document.getElementById('sched-series-end')?.value || '';
+            const project     = document.getElementById('sched-project')?.value || '';
+            const shared      = !(document.getElementById('sched-private')?.checked);
+
+            if (!name)        { alert('Name is required'); return; }
+            if (!startTime)   { alert('Start time is required'); return; }
+            if (!endTime)     { alert('End time is required'); return; }
+            if (!seriesStart) { alert('Starting date is required'); return; }
+
+            try {
+                const res = await fetch('/api/schedules', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'schedule', name, owner: currentUser, shared, assignedTo, project, startTime, endTime, frequency, rate, seriesStart, seriesEnd }),
+                });
+                if (res.ok) { closeModal(); await loadSchedules(); }
+                else alert('Failed to add schedule');
+            } catch (e) { alert('Error adding schedule'); console.error(e); }
+        }
+
+        // ── Open schedule modal (from calendar block) ────────────────────────
+
+        function openScheduleModal(scheduleId, dateStr) {
+            const sched = schedules.find(s => s.id == scheduleId);
+            if (!sched) return;
+            const ov = scheduleOverrides.find(o => String(o.scheduleId) === String(sched.id) && o.originalDate === dateStr);
+            const display = (ov && ov.overrideType === 'modified')
+                ? { ...sched, startTime: ov.newStartTime || sched.startTime, endTime: ov.newEndTime || sched.endTime }
+                : sched;
+            modalSchedule = { schedule: sched, dateStr, override: ov || null };
+
+            const freq = parseInt(sched.frequency) || 1;
+            const unit = freq === 1 ? sched.rate.replace(/s$/, '') : sched.rate;
+            const rows = [
+                ['Name',  escapeHtml(display.name)],
+                ['Date',  dateStr],
+                ['Time',  `${display.startTime} – ${display.endTime}`],
+                ['Repeat', `Every ${freq} ${unit}`],
+            ];
+            if (display.assignedTo) rows.push(['Assigned to', display.assignedTo]);
+            if (display.project)    rows.push(['Project', projectName(display.project) || '—']);
+            if (ov && ov.overrideType === 'modified') rows.push(['Note', 'This occurrence has been modified']);
+
+            _openScheduleModalCommon(rows, true);
+        }
+
+        // Open schedule modal from Schedules list (series-level only, no instance actions)
+        function openScheduleSeriesModal(scheduleId) {
+            const sched = schedules.find(s => s.id == scheduleId);
+            if (!sched) return;
+            modalSchedule = { schedule: sched, dateStr: null, override: null };
+
+            const freq = parseInt(sched.frequency) || 1;
+            const unit = freq === 1 ? sched.rate.replace(/s$/, '') : sched.rate;
+            const rows = [
+                ['Name',   escapeHtml(sched.name)],
+                ['Time',   `${sched.startTime} – ${sched.endTime}`],
+                ['Repeat', `Every ${freq} ${unit}`],
+                ['Starts', sched.seriesStart],
+            ];
+            if (sched.seriesEnd)  rows.push(['Ends', sched.seriesEnd]);
+            if (sched.assignedTo) rows.push(['Assigned to', sched.assignedTo]);
+            if (sched.project)    rows.push(['Project', projectName(sched.project) || '—']);
+
+            _openScheduleModalCommon(rows, false);
+        }
+
+        function _openScheduleModalCommon(rows, showInstanceActions) {
+            document.getElementById('modal-schedule-rows').innerHTML = rows.map(([label, value]) =>
+                `<div class="detail-row"><span class="detail-label">${label}</span><span class="detail-value">${value}</span></div>`
+            ).join('');
+            document.getElementById('modal-sched-instance-actions').hidden = !showInstanceActions;
+            document.getElementById('modal-title').textContent = 'Schedule';
+            document.getElementById('modal-detail').hidden   = true;
+            document.getElementById('modal-edit').hidden     = true;
+            document.getElementById('modal-add').hidden      = true;
+            document.getElementById('modal-day').hidden      = true;
+            document.getElementById('modal-schedule').hidden = false;
+            document.getElementById('modal-overlay').classList.add('open');
+            renderIcons();
+        }
+
+        // ── Instance actions: Cancel / Edit this day ─────────────────────────
+
+        async function scheduleCancelThisDay() {
+            if (!modalSchedule) return;
+            const { schedule, dateStr, override } = modalSchedule;
+            if (!confirm('Cancel this occurrence? The schedule continues as normal after this day.')) return;
+            try {
+                // Remove any existing override for this date first
+                if (override?.id) {
+                    await fetch('/api/schedules', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resource: 'override', id: override.id }) });
+                }
+                const res = await fetch('/api/schedules', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'override', scheduleId: schedule.id, originalDate: dateStr, overrideType: 'cancelled' }),
+                });
+                if (res.ok) { closeModal(); await loadSchedules(); }
+                else alert('Failed to cancel occurrence');
+            } catch (e) { alert('Error'); console.error(e); }
+        }
+
+        function scheduleEditThisDay() {
+            if (!modalSchedule) return;
+            const { schedule, override } = modalSchedule;
+            const curStart = override?.newStartTime || schedule.startTime;
+            const curEnd   = override?.newEndTime   || schedule.endTime;
+            document.getElementById('modal-edit-form').innerHTML = `
+                <p style="font-size:13px;color:#666;margin-bottom:8px">Editing just this occurrence</p>
+                <div class="modal-field">
+                    <div class="modal-field-label">Time</div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="time" id="sched-edit-start" step="300" value="${curStart}" style="flex:1">
+                        <span style="color:#aaa;font-size:13px">–</span>
+                        <input type="time" id="sched-edit-end" step="300" value="${curEnd}" style="flex:1">
+                    </div>
+                </div>`;
+            _showScheduleEditPanel(saveScheduleThisDay);
+        }
+
+        async function saveScheduleThisDay() {
+            if (!modalSchedule) return;
+            const { schedule, dateStr, override } = modalSchedule;
+            const newStart = document.getElementById('sched-edit-start').value;
+            const newEnd   = document.getElementById('sched-edit-end').value;
+            try {
+                if (override?.id) {
+                    await fetch('/api/schedules', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resource: 'override', id: override.id }) });
+                }
+                const res = await fetch('/api/schedules', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'override', scheduleId: schedule.id, originalDate: dateStr, overrideType: 'modified', newStartTime: newStart, newEndTime: newEnd }),
+                });
+                if (res.ok) { closeModal(); await loadSchedules(); }
+                else alert('Failed to save');
+            } catch (e) { alert('Error'); console.error(e); }
+        }
+
+        // ── Edit from here onwards ────────────────────────────────────────────
+
+        function scheduleEditFromHere() {
+            if (!modalSchedule) return;
+            const { schedule } = modalSchedule;
+            document.getElementById('modal-edit-form').innerHTML = `
+                <p style="font-size:13px;color:#666;margin-bottom:8px">Editing this day and all following</p>
+                <div class="modal-field">
+                    <div class="modal-field-label">Name</div>
+                    <input type="text" id="sched-edit-name" value="${escapeHtml(schedule.name)}">
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Assign to</div>
+                    <select id="sched-edit-assigned-to">
+                        <option value="" ${!schedule.assignedTo?'selected':''}>— Unassigned —</option>
+                        <option value="Gabriel" ${schedule.assignedTo==='Gabriel'?'selected':''}>Gabriel</option>
+                        <option value="Thomas"  ${schedule.assignedTo==='Thomas'?'selected':''}>Thomas</option>
+                        <option value="Both"    ${schedule.assignedTo==='Both'?'selected':''}>Both</option>
+                    </select>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Time</div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="time" id="sched-edit-start" step="300" value="${schedule.startTime}" style="flex:1">
+                        <span style="color:#aaa;font-size:13px">–</span>
+                        <input type="time" id="sched-edit-end" step="300" value="${schedule.endTime}" style="flex:1">
+                    </div>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Repeat every</div>
+                    <div class="modal-recur-row">
+                        <input type="number" id="sched-edit-freq" min="1" value="${schedule.frequency || 1}">
+                        <select id="sched-edit-rate">
+                            <option value="days"   ${schedule.rate==='days'?'selected':''}>days</option>
+                            <option value="weeks"  ${(schedule.rate||'weeks')==='weeks'?'selected':''}>weeks</option>
+                            <option value="months" ${schedule.rate==='months'?'selected':''}>months</option>
+                        </select>
+                    </div>
+                </div>`;
+            _showScheduleEditPanel(saveScheduleFromHere);
+        }
+
+        async function saveScheduleFromHere() {
+            if (!modalSchedule) return;
+            const { schedule, dateStr } = modalSchedule;
+            const name       = (document.getElementById('sched-edit-name')?.value || '').trim();
+            const assignedTo = document.getElementById('sched-edit-assigned-to')?.value || '';
+            const newStart   = document.getElementById('sched-edit-start')?.value || '';
+            const newEnd     = document.getElementById('sched-edit-end')?.value   || '';
+            const frequency  = parseInt(document.getElementById('sched-edit-freq')?.value) || 1;
+            const rate       = document.getElementById('sched-edit-rate')?.value  || 'weeks';
+            if (!name) { alert('Name is required'); return; }
+
+            // Compute the day before this occurrence
+            const [dy, dm, dd] = dateStr.split('-').map(Number);
+            const dayBefore = new Date(dy, dm-1, dd);
+            dayBefore.setDate(dayBefore.getDate() - 1);
+            const dayBeforeStr = dateToStr(dayBefore);
+
+            try {
+                // If this IS the series start, just edit the series directly (no split)
+                if (dateStr <= schedule.seriesStart) {
+                    await fetch('/api/schedules', {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ resource: 'schedule', id: schedule.id, name, assignedTo, startTime: newStart, endTime: newEnd, frequency, rate }),
+                    });
+                } else {
+                    // End the old series the day before, start a new series from here
+                    await fetch('/api/schedules', {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ resource: 'schedule', id: schedule.id, seriesEnd: dayBeforeStr }),
+                    });
+                    await fetch('/api/schedules', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ resource: 'schedule', name, owner: schedule.owner, shared: schedule.shared, assignedTo, project: schedule.project, startTime: newStart, endTime: newEnd, frequency, rate, seriesStart: dateStr, seriesEnd: '' }),
+                    });
+                }
+                closeModal(); await loadSchedules();
+            } catch (e) { alert('Error saving'); console.error(e); }
+        }
+
+        // ── Edit / delete entire series ───────────────────────────────────────
+
+        function scheduleEditSeries() {
+            if (!modalSchedule) return;
+            const { schedule } = modalSchedule;
+            const projOptions = '<option value="">No project</option>' +
+                [...projects].sort((a,b) => a.name.localeCompare(b.name))
+                    .map(p => `<option value="${p.id}" ${p.id == schedule.project ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+            document.getElementById('modal-edit-form').innerHTML = `
+                <p style="font-size:13px;color:#666;margin-bottom:8px">Editing entire schedule series</p>
+                <div class="modal-field">
+                    <div class="modal-field-label">Name</div>
+                    <input type="text" id="sched-edit-name" value="${escapeHtml(schedule.name)}">
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Assign to</div>
+                    <select id="sched-edit-assigned-to">
+                        <option value="" ${!schedule.assignedTo?'selected':''}>— Unassigned —</option>
+                        <option value="Gabriel" ${schedule.assignedTo==='Gabriel'?'selected':''}>Gabriel</option>
+                        <option value="Thomas"  ${schedule.assignedTo==='Thomas'?'selected':''}>Thomas</option>
+                        <option value="Both"    ${schedule.assignedTo==='Both'?'selected':''}>Both</option>
+                    </select>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Time</div>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="time" id="sched-edit-start" step="300" value="${schedule.startTime}" style="flex:1">
+                        <span style="color:#aaa;font-size:13px">–</span>
+                        <input type="time" id="sched-edit-end" step="300" value="${schedule.endTime}" style="flex:1">
+                    </div>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Repeat every</div>
+                    <div class="modal-recur-row">
+                        <input type="number" id="sched-edit-freq" min="1" value="${schedule.frequency || 1}">
+                        <select id="sched-edit-rate">
+                            <option value="days"   ${schedule.rate==='days'?'selected':''}>days</option>
+                            <option value="weeks"  ${(schedule.rate||'weeks')==='weeks'?'selected':''}>weeks</option>
+                            <option value="months" ${schedule.rate==='months'?'selected':''}>months</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Starting from</div>
+                    <input type="date" id="sched-edit-series-start" value="${schedule.seriesStart || ''}">
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Ending <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
+                    <input type="date" id="sched-edit-series-end" value="${schedule.seriesEnd || ''}">
+                </div>
+                <div class="modal-field">
+                    <div class="modal-field-label">Project</div>
+                    <select id="sched-edit-project">${projOptions}</select>
+                </div>
+                <div class="modal-field">
+                    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                        <input type="checkbox" id="sched-edit-private" ${!schedule.shared?'checked':''}>
+                        <span class="modal-field-label" style="margin:0">Private</span>
+                    </label>
+                </div>`;
+            _showScheduleEditPanel(saveScheduleSeries);
+        }
+
+        async function saveScheduleSeries() {
+            if (!modalSchedule) return;
+            const { schedule } = modalSchedule;
+            const name = (document.getElementById('sched-edit-name')?.value || '').trim();
+            if (!name) { alert('Name is required'); return; }
+            const body = {
+                resource: 'schedule', id: schedule.id, name,
+                assignedTo:   document.getElementById('sched-edit-assigned-to')?.value || '',
+                startTime:    document.getElementById('sched-edit-start')?.value || '',
+                endTime:      document.getElementById('sched-edit-end')?.value   || '',
+                frequency:    parseInt(document.getElementById('sched-edit-freq')?.value) || 1,
+                rate:         document.getElementById('sched-edit-rate')?.value  || 'weeks',
+                seriesStart:  document.getElementById('sched-edit-series-start')?.value || '',
+                seriesEnd:    document.getElementById('sched-edit-series-end')?.value   || '',
+                project:      document.getElementById('sched-edit-project')?.value      || '',
+                shared:       !(document.getElementById('sched-edit-private')?.checked),
+            };
+            try {
+                const res = await fetch('/api/schedules', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (res.ok) { closeModal(); await loadSchedules(); }
+                else alert('Failed to save');
+            } catch (e) { alert('Error saving'); console.error(e); }
+        }
+
+        async function scheduleDeleteSeries() {
+            if (!modalSchedule) return;
+            const { schedule } = modalSchedule;
+            if (!confirm(`Delete "${schedule.name}"? This removes the entire schedule and all exceptions.`)) return;
+            try {
+                const res = await fetch('/api/schedules', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ resource: 'schedule', id: schedule.id }) });
+                if (res.ok) { closeModal(); await loadSchedules(); }
+                else alert('Failed to delete schedule');
+            } catch (e) { alert('Error deleting'); console.error(e); }
+        }
+
+        // Helper: switch modal to edit panel with custom save handler
+        function _showScheduleEditPanel(saveFn) {
+            document.getElementById('modal-schedule').hidden = true;
+            document.getElementById('modal-edit').hidden     = false;
+            const saveBtn   = document.querySelector('#modal-edit .modal-btn-primary');
+            const cancelBtn = document.querySelector('#modal-edit .modal-btn-secondary');
+            if (saveBtn)   saveBtn.onclick   = saveFn;
+            if (cancelBtn) cancelBtn.onclick = () => {
+                document.getElementById('modal-edit').hidden     = true;
+                document.getElementById('modal-schedule').hidden = false;
+            };
         }
 
         // Tab navigation
