@@ -1272,6 +1272,11 @@
                 const _fb = document.getElementById('project-filter-bar');
                 _fb.classList.toggle('visible', activeSection === 'tasks' || activeSection === 'shopping');
 
+                // Deep-link: ?tab=calendar opens a specific tab on launch.
+                const _tabParam = new URLSearchParams(window.location.search).get('tab');
+                const _validTabs = ['today','calendar','tasks','shopping','projects','notes'];
+                if (_tabParam && _validTabs.includes(_tabParam)) showSection(_tabParam);
+
                 // Load projects first (needed for the filter bar, dropdowns,
                 // and project tags on tasks), then tasks. Schedules load in parallel.
                 loadProjects().then(loadTasks);
