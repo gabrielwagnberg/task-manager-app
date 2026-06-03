@@ -265,9 +265,10 @@ module.exports = async (req, res) => {
         const today = todayStr();
         const rate = row.get('Rate') || 'days';
         const frequency = row.get('Frequency');
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const nextDue = computeNextDue(toDateStr(tomorrow), frequency, rate);
+        // Always anchor next due to today, not tomorrow or the task's current due date.
+        // This means checking a task due Saturday on Wednesday gives Wednesday + interval,
+        // not Saturday + interval — the recurrence is always relative to when you did it.
+        const nextDue = computeNextDue(today, frequency, rate);
 
         row.set('Last Done', today);
         row.set('Next Due', nextDue);

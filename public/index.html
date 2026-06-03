@@ -130,6 +130,8 @@
             height: 16px;
             padding: 0 4px;
         }
+        /* Ensure the badge truly hides — the class's display:inline-flex would otherwise beat [hidden] */
+        .today-badge[hidden] { display: none !important; }
 
         /* Mobile: icons only — hides tab labels, keeps icons + badge */
         @media (max-width: 520px) {
@@ -801,9 +803,14 @@
         /* ===== CALENDAR ===== */
         .calendar-nav {
             display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .calendar-nav-row {
+            display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-bottom: 14px;
         }
         .calendar-nav-btn {
             background: none;
@@ -1119,13 +1126,17 @@
             <!-- CALENDAR SECTION -->
             <section id="section-calendar" class="section">
                 <div class="calendar-nav">
-                    <button class="calendar-nav-btn" onclick="prevPeriod()"><i data-lucide="chevron-left" class="icon"></i></button>
-                    <span id="calendar-month-title" class="calendar-month-title"></span>
-                    <button class="calendar-nav-btn" onclick="nextPeriod()"><i data-lucide="chevron-right" class="icon"></i></button>
-                    <div class="cal-view-toggle">
-                        <button class="cal-view-btn active" data-view="month" onclick="switchCalendarView('month')">Month</button>
-                        <button class="cal-view-btn" data-view="week" onclick="switchCalendarView('week')">Week</button>
-                        <button class="cal-view-btn" data-view="schedules" onclick="switchCalendarView('schedules')">Events</button>
+                    <div class="calendar-nav-row">
+                        <button class="calendar-nav-btn" onclick="prevPeriod()"><i data-lucide="chevron-left" class="icon"></i></button>
+                        <span id="calendar-month-title" class="calendar-month-title"></span>
+                        <button class="calendar-nav-btn" onclick="nextPeriod()"><i data-lucide="chevron-right" class="icon"></i></button>
+                    </div>
+                    <div class="calendar-nav-row" style="justify-content:center">
+                        <div class="cal-view-toggle">
+                            <button class="cal-view-btn active" data-view="month" onclick="switchCalendarView('month')">Month</button>
+                            <button class="cal-view-btn" data-view="week" onclick="switchCalendarView('week')">Week</button>
+                            <button class="cal-view-btn" data-view="schedules" onclick="switchCalendarView('schedules')">Events</button>
+                        </div>
                     </div>
                 </div>
                 <div id="calendar-grid" class="calendar-grid"></div>
@@ -1493,7 +1504,8 @@
             }
 
             if (urgent.length === 0) {
-                todayList.innerHTML = '<div class="empty-state">All caught up! 🎉</div>';
+                todayList.innerHTML = `<div class="empty-state">${ic('circle-check-big')} All caught up!</div>`;
+                renderIcons();
             } else {
                 todayList.innerHTML = urgent.map(task => {
                     const recurIcon  = task.recurring ? ' ' + ic('repeat') : '';
