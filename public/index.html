@@ -895,8 +895,8 @@
         .cal-task.t-recurring { background: #fbcfe8; color: #9d174d; }
         .cal-task.t-shared    { background: #fca5a5; color: #7f1d1d; }
 
-        /* Schedule pill visual distinction (italic label, subtle left accent) */
-        .cal-task.is-schedule { font-style: italic; border-left: 2px solid rgba(0,0,0,0.18); }
+        /* Schedule pill visual distinction (bold label, subtle left accent) */
+        .cal-task.is-schedule { font-weight: 700; border-left: 2px solid rgba(0,0,0,0.18); }
 
         /* ── View toggle (Month / Week / Schedules) ── */
         .cal-view-toggle {
@@ -1392,9 +1392,10 @@
                 // Effective date: recurring tasks use Next Due, one-offs use Due Date.
                 const effDate = t => t.recurring ? t.nextDue : t.dueDate;
 
-                // Sort: incomplete first → priority (1 first, none last) → soonest due first (no date last).
+                // Sort: incomplete first → recurring first → priority (1 first, none last) → soonest due first (no date last).
                 const sorted = [...visible].sort((a, b) => {
                     if (a.completed !== b.completed) return a.completed ? 1 : -1;
+                    if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
                     const pa = a.priority ? parseInt(a.priority) : 999;
                     const pb = b.priority ? parseInt(b.priority) : 999;
                     if (pa !== pb) return pa - pb;
@@ -1465,8 +1466,9 @@
                 return date && date <= today;
             });
 
-            // Most overdue first (earliest date first).
+            // Recurring tasks first, then most overdue first within each group.
             urgent.sort((a, b) => {
+                if (a.recurring !== b.recurring) return a.recurring ? -1 : 1;
                 const da = a.recurring ? a.nextDue : a.dueDate;
                 const db = b.recurring ? b.nextDue : b.dueDate;
                 return da < db ? -1 : (da > db ? 1 : 0);
@@ -2186,7 +2188,10 @@
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label"><span id="task-due-label">Due date</span> <span id="task-due-note" style="font-weight:400;text-transform:none;font-size:11px;display:none"></span></div>
-                        <input type="date" id="task-due">
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <input type="date" id="task-due" style="flex:1">
+                            <button type="button" onclick="document.getElementById('task-due').value=''" style="padding:10px 8px;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;color:#aaa;font-size:15px;line-height:1;font-family:inherit" title="Clear date">×</button>
+                        </div>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
@@ -2264,7 +2269,7 @@
                 form.innerHTML = `
                     <div class="modal-field">
                         <div class="modal-field-label">Name</div>
-                        <input type="text" id="sched-name" placeholder="e.g. Stephan session" autocomplete="off">
+                        <input type="text" id="sched-name" placeholder="Schedule name..." autocomplete="off">
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Assign to</div>
@@ -2284,23 +2289,37 @@
                         </div>
                     </div>
                     <div class="modal-field">
-                        <div class="modal-field-label">Repeat every</div>
-                        <div class="modal-recur-row">
-                            <input type="number" id="sched-frequency" min="1" value="1">
-                            <select id="sched-rate">
-                                <option value="days">days</option>
-                                <option value="weeks" selected>weeks</option>
-                                <option value="months">months</option>
-                            </select>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="sched-onetime" onchange="toggleSchedOneTime()">
+                            <span class="modal-field-label" style="margin:0">One-time block</span>
+                        </label>
+                    </div>
+                    <!-- One-time date field (hidden by default) -->
+                    <div class="modal-field" id="sched-onetime-field" hidden>
+                        <div class="modal-field-label">Date</div>
+                        <input type="date" id="sched-onetime-date" value="${today}">
+                    </div>
+                    <!-- Recurring fields (shown by default) -->
+                    <div id="sched-recurring-fields">
+                        <div class="modal-field">
+                            <div class="modal-field-label">Repeat every</div>
+                            <div class="modal-recur-row">
+                                <input type="number" id="sched-frequency" min="1" value="1">
+                                <select id="sched-rate">
+                                    <option value="days">days</option>
+                                    <option value="weeks" selected>weeks</option>
+                                    <option value="months">months</option>
+                                </select>
+                            </div>
                         </div>
-                    </div>
-                    <div class="modal-field">
-                        <div class="modal-field-label">Starting from</div>
-                        <input type="date" id="sched-series-start" value="${today}">
-                    </div>
-                    <div class="modal-field">
-                        <div class="modal-field-label">Ending <span style="font-weight:400;text-transform:none;font-size:11px">(optional — leave blank for no end)</span></div>
-                        <input type="date" id="sched-series-end">
+                        <div class="modal-field">
+                            <div class="modal-field-label">Starting from</div>
+                            <input type="date" id="sched-series-start" value="${today}">
+                        </div>
+                        <div class="modal-field">
+                            <div class="modal-field-label">Ending <span style="font-weight:400;text-transform:none;font-size:11px">(optional — leave blank for no end)</span></div>
+                            <input type="date" id="sched-series-end">
+                        </div>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Project</div>
@@ -2622,7 +2641,10 @@
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label"><span id="edit-due-label-text">${dateLabel}</span> <span id="edit-due-label-note" style="font-weight:400;text-transform:none;font-size:11px">${dateLabelNote}</span></div>
-                        <input type="date" id="edit-due" value="${dateValue}">
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <input type="date" id="edit-due" value="${dateValue}" style="flex:1">
+                            <button type="button" onclick="document.getElementById('edit-due').value=''" style="padding:10px 8px;border:1px solid #e0e0e0;border-radius:8px;background:#f9f9f9;cursor:pointer;color:#aaa;font-size:15px;line-height:1;font-family:inherit" title="Clear date">×</button>
+                        </div>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
@@ -3211,10 +3233,12 @@
                 const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
                 const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
                 const privacyTag = !s.shared ? ' ' + ic('lock') : '';
+                const isOneTime = !!(s.seriesEnd && s.seriesEnd === s.seriesStart);
+                const recurStr  = isOneTime ? `Once · ${s.seriesStart}` : `Every ${freq} ${unit}`;
                 return `<div class="item">
                     <div class="item-content">
                         <button class="item-name-btn" onclick="openScheduleSeriesModal(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
-                        <div class="item-meta">${timeStr} · Every ${freq} ${unit}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
+                        <div class="item-meta">${timeStr} · ${recurStr}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
                     </div>
                 </div>`;
             }).join('');
@@ -3228,17 +3252,26 @@
             const assignedTo = document.getElementById('sched-assigned-to')?.value || '';
             const startTime  = document.getElementById('sched-start-time')?.value || '';
             const endTime    = document.getElementById('sched-end-time')?.value || '';
-            const frequency  = parseInt(document.getElementById('sched-frequency')?.value) || 1;
-            const rate       = document.getElementById('sched-rate')?.value || 'weeks';
-            const seriesStart = document.getElementById('sched-series-start')?.value || '';
-            const seriesEnd   = document.getElementById('sched-series-end')?.value || '';
-            const project     = document.getElementById('sched-project')?.value || '';
-            const shared      = !(document.getElementById('sched-private')?.checked);
+            const project    = document.getElementById('sched-project')?.value || '';
+            const shared     = !(document.getElementById('sched-private')?.checked);
+            const oneTime    = document.getElementById('sched-onetime')?.checked;
+
+            // One-time block uses a single date; recurring uses series start/end + interval
+            let frequency, rate, seriesStart, seriesEnd;
+            if (oneTime) {
+                seriesStart = seriesEnd = document.getElementById('sched-onetime-date')?.value || '';
+                frequency = 1; rate = 'weeks'; // stored but irrelevant for one-time
+            } else {
+                frequency   = parseInt(document.getElementById('sched-frequency')?.value) || 1;
+                rate        = document.getElementById('sched-rate')?.value || 'weeks';
+                seriesStart = document.getElementById('sched-series-start')?.value || '';
+                seriesEnd   = document.getElementById('sched-series-end')?.value || '';
+            }
 
             if (!name)        { alert('Name is required'); return; }
             if (!startTime)   { alert('Start time is required'); return; }
             if (!endTime)     { alert('End time is required'); return; }
-            if (!seriesStart) { alert('Starting date is required'); return; }
+            if (!seriesStart) { alert(oneTime ? 'Date is required' : 'Starting date is required'); return; }
 
             try {
                 const res = await fetch('/api/schedules', {
@@ -3264,12 +3297,14 @@
 
             const freq = parseInt(sched.frequency) || 1;
             const unit = freq === 1 ? sched.rate.replace(/s$/, '') : sched.rate;
+            const isOneTime = !!(sched.seriesEnd && sched.seriesEnd === sched.seriesStart);
             const rows = [
                 ['Name',  escapeHtml(display.name)],
                 ['Date',  dateStr],
                 ['Time',  `${display.startTime} – ${display.endTime}`],
-                ['Repeat', `Every ${freq} ${unit}`],
             ];
+            if (isOneTime) rows.push(['Type', 'One-time block']);
+            else           rows.push(['Repeat', `Every ${freq} ${unit}`]);
             if (display.assignedTo) rows.push(['Assigned to', display.assignedTo]);
             if (display.project)    rows.push(['Project', projectName(display.project) || '—']);
             if (ov && ov.overrideType === 'modified') rows.push(['Note', 'This occurrence has been modified']);
@@ -3285,13 +3320,19 @@
 
             const freq = parseInt(sched.frequency) || 1;
             const unit = freq === 1 ? sched.rate.replace(/s$/, '') : sched.rate;
+            const isOneTime = !!(sched.seriesEnd && sched.seriesEnd === sched.seriesStart);
             const rows = [
-                ['Name',   escapeHtml(sched.name)],
-                ['Time',   `${sched.startTime} – ${sched.endTime}`],
-                ['Repeat', `Every ${freq} ${unit}`],
-                ['Starts', sched.seriesStart],
+                ['Name',  escapeHtml(sched.name)],
+                ['Time',  `${sched.startTime} – ${sched.endTime}`],
             ];
-            if (sched.seriesEnd)  rows.push(['Ends', sched.seriesEnd]);
+            if (isOneTime) {
+                rows.push(['Type', 'One-time block']);
+                rows.push(['Date', sched.seriesStart]);
+            } else {
+                rows.push(['Repeat', `Every ${freq} ${unit}`]);
+                rows.push(['Starts', sched.seriesStart]);
+                if (sched.seriesEnd) rows.push(['Ends', sched.seriesEnd]);
+            }
             if (sched.assignedTo) rows.push(['Assigned to', sched.assignedTo]);
             if (sched.project)    rows.push(['Project', projectName(sched.project) || '—']);
 
@@ -3546,6 +3587,13 @@
                 if (res.ok) { closeModal(); await loadSchedules(); }
                 else alert('Failed to delete schedule');
             } catch (e) { alert('Error deleting'); console.error(e); }
+        }
+
+        // Toggle between one-time and recurring fields in the Add Schedule form
+        function toggleSchedOneTime() {
+            const on = document.getElementById('sched-onetime')?.checked;
+            document.getElementById('sched-onetime-field').hidden    = !on;
+            document.getElementById('sched-recurring-fields').hidden =  on;
         }
 
         // Helper: switch modal to edit panel with custom save handler
