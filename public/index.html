@@ -897,6 +897,8 @@
 
         /* Schedule pill visual distinction (bold label, subtle left accent) */
         .cal-task.is-schedule { font-weight: 700; border-left: 2px solid rgba(0,0,0,0.18); }
+        .cal-task.t-birthday    { background: #fef9c3; color: #854d0e; cursor: default; }
+        .cal-task.t-special-day { background: #d1fae5; color: #065f46; cursor: default; }
 
         /* ── View toggle (Month / Week / Schedules) ── */
         .cal-view-toggle {
@@ -1123,7 +1125,7 @@
                     <div class="cal-view-toggle">
                         <button class="cal-view-btn active" data-view="month" onclick="switchCalendarView('month')">Month</button>
                         <button class="cal-view-btn" data-view="week" onclick="switchCalendarView('week')">Week</button>
-                        <button class="cal-view-btn" data-view="schedules" onclick="switchCalendarView('schedules')">Schedules</button>
+                        <button class="cal-view-btn" data-view="schedules" onclick="switchCalendarView('schedules')">Events</button>
                     </div>
                 </div>
                 <div id="calendar-grid" class="calendar-grid"></div>
@@ -1168,7 +1170,10 @@
 
             <!-- Day view -->
             <div id="modal-day" hidden>
-                <button class="add-toggle-btn" style="margin-left:22px;width:calc(100% - 22px)" onclick="openAddBlockForDay()"><i data-lucide="plus" class="icon"></i> Add Block</button>
+                <div style="display:flex;gap:8px;margin-left:22px;width:calc(100% - 22px)">
+                    <button class="add-toggle-btn" style="flex:1" onclick="openAddTaskForDay()"><i data-lucide="plus" class="icon"></i> Add Task</button>
+                    <button class="add-toggle-btn" style="flex:1" onclick="openAddScheduleForDay()"><i data-lucide="plus" class="icon"></i> Add Schedule</button>
+                </div>
                 <div id="modal-day-content"></div>
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
@@ -1217,6 +1222,9 @@
         let activeSection = 'today';
         let activeShoppingCategory = 'Grocery';
         let activeProjectFilter = 'all'; // 'all' or a project id; persists across Tasks/Shopping
+        let birthdays      = [];   // from /api/specials
+        let specialDays    = [];   // from /api/specials
+        let specialsLoaded = false;
         let tasksLoaded = false;
         let shoppingLoaded = false;
         let notesLoaded = false;
@@ -1255,6 +1263,7 @@
                 // and project tags on tasks), then tasks. Schedules load in parallel.
                 loadProjects().then(loadTasks);
                 loadSchedules();
+                loadSpecials();
             }
         }
 
@@ -2136,8 +2145,8 @@
 
         let addModalSection = null;
 
-        const addModalTitles  = { tasks: 'New Task', shopping: 'New Item', notes: 'New Note', projects: 'New Project', schedules: 'New Schedule' };
-        const addModalBtnText = { tasks: 'Add Task', shopping: 'Add Item', notes: 'Add Note', projects: 'Add Project', schedules: 'Add Schedule' };
+        const addModalTitles  = { tasks: 'New Task', shopping: 'New Item', notes: 'New Note', projects: 'New Project', schedules: 'New Schedule', birthdays: 'New Birthday', 'special-days': 'New Holiday / Red Day' };
+        const addModalBtnText = { tasks: 'Add Task', shopping: 'Add Item', notes: 'Add Note', projects: 'Add Project', schedules: 'Add Schedule', birthdays: 'Add Birthday', 'special-days': 'Add' };
 
         function openAddModal(section) {
             addModalSection = section;
@@ -2332,6 +2341,61 @@
                         </label>
                     </div>
                 `;
+            } else if (section === 'birthdays') {
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Person's name</div>
+                        <input type="text" id="bday-name" placeholder="e.g. Mom, Thomas..." autocomplete="off"
+                            onkeypress="if(event.key==='Enter') submitAddForm()">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Birthday (month + day — year doesn't matter)</div>
+                        <input type="date" id="bday-date">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Notes <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
+                        <input type="text" id="bday-notes" placeholder="Optional note..." autocomplete="off">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="bday-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
+            } else if (section === 'special-days') {
+                const today = todayStr();
+                form.innerHTML = `
+                    <div class="modal-field">
+                        <div class="modal-field-label">Name</div>
+                        <input type="text" id="spec-name" placeholder="e.g. Midsommarafton, Christmas..." autocomplete="off"
+                            onkeypress="if(event.key==='Enter') submitAddForm()">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="spec-recurring" checked onchange="toggleSpecRecurring()">
+                            <span class="modal-field-label" style="margin:0">Annual (recurs every year)</span>
+                        </label>
+                    </div>
+                    <div class="modal-field" id="spec-annual-field">
+                        <div class="modal-field-label">Date (month + day — year doesn't matter)</div>
+                        <input type="date" id="spec-annual-date">
+                    </div>
+                    <div class="modal-field" id="spec-onetime-field" hidden>
+                        <div class="modal-field-label">Date</div>
+                        <input type="date" id="spec-onetime-date" value="${today}">
+                    </div>
+                    <div class="modal-field">
+                        <div class="modal-field-label">Notes <span style="font-weight:400;text-transform:none;font-size:11px">(optional)</span></div>
+                        <input type="text" id="spec-notes" placeholder="Optional note..." autocomplete="off">
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="spec-private">
+                            <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                `;
             } else {
                 // projects
                 form.innerHTML = `
@@ -2374,6 +2438,8 @@
             else if (addModalSection === 'notes')      addNote();
             else if (addModalSection === 'projects')   addProject();
             else if (addModalSection === 'schedules')  addSchedule();
+            else if (addModalSection === 'birthdays')    addBirthday();
+            else if (addModalSection === 'special-days') addSpecialDay();
         }
 
         // ── Day popup (tapping a month-view cell) ────────────────────────────
@@ -2388,12 +2454,24 @@
             document.getElementById('modal-overlay').classList.add('open');
         }
 
-        function openAddBlockForDay() {
+        function openAddTaskForDay() {
             openAddModal('tasks');
             document.getElementById('modal-day').hidden = true;
             if (currentDayDate) {
                 const el = document.getElementById('task-due');
                 if (el) el.value = currentDayDate;
+            }
+        }
+
+        function openAddScheduleForDay() {
+            openAddModal('schedules');
+            document.getElementById('modal-day').hidden = true;
+            if (currentDayDate) {
+                // Pre-check "one-time block" and pre-fill the date
+                const oneTimeChk = document.getElementById('sched-onetime');
+                if (oneTimeChk) { oneTimeChk.checked = true; toggleSchedOneTime(); }
+                const dateEl = document.getElementById('sched-onetime-date');
+                if (dateEl) dateEl.value = currentDayDate;
             }
         }
 
@@ -2425,10 +2503,18 @@
             const schedTimed   = schedBlocks.filter(s =>  s.startTime);
 
             // All-day row (schedule all-days + untimed tasks)
-            const alldayHtml = (schedAllday.length || alldayTasks.length) ? `
+            const bdayItems = getBirthdaysForDate(dateStr);
+            const specItems = getSpecialDaysForDate(dateStr);
+            const alldayHtml = (bdayItems.length || specItems.length || schedAllday.length || alldayTasks.length) ? `
                 <div class="cal-day-view-allday">
                     <div class="cal-week-gutter"></div>
                     <div class="cal-allday-col">${
+                        bdayItems.map(b =>
+                            `<div class="cal-task t-birthday">${ic('cake')} ${escapeHtml(b.name)}</div>`
+                        ).join('') +
+                        specItems.map(s =>
+                            `<div class="cal-task t-special-day">${escapeHtml(s.name)}</div>`
+                        ).join('') +
                         schedAllday.map(s =>
                             `<button class="cal-task is-schedule ${scheduleColourCls(s)}" onclick="openScheduleModal(${s.id},'${dateStr}')">${escapeHtml(s.name)}</button>`
                         ).join('') +
@@ -3019,7 +3105,13 @@
                 const taskHtml = dayTasks.map(t =>
                     `<button class="cal-task ${taskColourCls(t)}" onclick="event.stopPropagation();openModal('task',${t.id})">${escapeHtml(t.name)}</button>`
                 ).join('');
-                html += `<div class="cal-day${isToday ? ' today' : ''}" onclick="openDayView('${dateStr}')"><span class="cal-day-num">${d}</span>${schedHtml}${taskHtml}</div>`;
+                const bdayHtml = getBirthdaysForDate(dateStr).map(b =>
+                    `<div class="cal-task t-birthday">${ic('cake')} ${escapeHtml(b.name)}</div>`
+                ).join('');
+                const specHtml = getSpecialDaysForDate(dateStr).map(s =>
+                    `<div class="cal-task t-special-day">${escapeHtml(s.name)}</div>`
+                ).join('');
+                html += `<div class="cal-day${isToday ? ' today' : ''}" onclick="openDayView('${dateStr}')"><span class="cal-day-num">${d}</span>${bdayHtml}${specHtml}${schedHtml}${taskHtml}</div>`;
             }
 
             // Trailing padding to complete the last row
@@ -3078,7 +3170,15 @@
                 const ds = dateToStr(d);
                 const schedAllday = getScheduleBlocks(ds).filter(s => !s.startTime);
                 const dayTasks    = (taskMap[ds] || []).filter(t => !t.startTime);
+                const bdayItems   = getBirthdaysForDate(ds);
+                const specItems   = getSpecialDaysForDate(ds);
                 alldayHtml += `<div class="cal-allday-col">${
+                    bdayItems.map(b =>
+                        `<div class="cal-task t-birthday">${ic('cake')} ${escapeHtml(b.name)}</div>`
+                    ).join('') +
+                    specItems.map(s =>
+                        `<div class="cal-task t-special-day">${escapeHtml(s.name)}</div>`
+                    ).join('') +
                     schedAllday.map(s =>
                         `<button class="cal-task is-schedule ${scheduleColourCls(s)}" onclick="openScheduleModal(${s.id},'${ds}')">${escapeHtml(s.name)}</button>`
                     ).join('') +
@@ -3166,6 +3266,37 @@
             }
         }
 
+        async function loadSpecials() {
+            try {
+                const res = await fetch(`/api/specials?user=${encodeURIComponent(currentUser)}`);
+                const data = await res.json();
+                birthdays   = data.birthdays   || [];
+                specialDays = data.specialDays || [];
+                specialsLoaded = true;
+                if (activeSection === 'calendar') renderCalendar();
+            } catch (e) {
+                console.error('Error loading specials:', e);
+            }
+        }
+
+        // Returns all birthdays that fall on the given dateStr (YYYY-MM-DD).
+        // Compares only MM-DD portion since birthdays recur every year.
+        function getBirthdaysForDate(dateStr) {
+            const parts = dateStr.split('-');
+            const md = `${parts[1]}-${parts[2]}`;
+            return birthdays.filter(b => b.date === md);
+        }
+
+        // Returns all special days that fall on the given dateStr (YYYY-MM-DD).
+        // Recurring special days compare only MM-DD; one-time compare full date.
+        function getSpecialDaysForDate(dateStr) {
+            const parts = dateStr.split('-');
+            const md = `${parts[1]}-${parts[2]}`;
+            return specialDays.filter(s =>
+                s.recurring ? s.date === md : s.date === dateStr
+            );
+        }
+
         // Returns true if schedule series produces an occurrence on dateStr (YYYY-MM-DD).
         function isOccurrence(sched, dateStr) {
             if (!sched.seriesStart || dateStr < sched.seriesStart) return false;
@@ -3191,6 +3322,7 @@
             const blocks = [];
             schedules.forEach(s => {
                 if (!isOccurrence(s, dateStr)) return;
+                if (!matchesProjectFilter(s)) return; // honour active project filter
                 const ov = scheduleOverrides.find(o => String(o.scheduleId) === String(s.id) && o.originalDate === dateStr);
                 if (ov) {
                     if (ov.overrideType === 'cancelled') return;
@@ -3213,35 +3345,87 @@
 
         // ── Schedules list view (calendarView === 'schedules') ───────────────
 
+        // Format a MM-DD date string as e.g. "Jun 15"
+        function formatMonthDay(md) {
+            const parts = md.split('-');
+            if (parts.length !== 2) return md;
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `${monthNames[parseInt(parts[0]) - 1]} ${parseInt(parts[1])}`;
+        }
+
         function renderSchedulesList() {
             const titleEl = document.getElementById('calendar-month-title');
             const gridEl  = document.getElementById('calendar-grid');
             if (!titleEl || !gridEl) return;
-            titleEl.textContent = 'Schedules';
+            titleEl.textContent = 'Events';
             gridEl.className    = '';
 
-            const addBtn = `<button class="add-toggle-btn" onclick="openAddModal('schedules')" style="margin-bottom:12px">${ic('plus')} Add Schedule</button>`;
+            // ── Schedule blocks ──
+            const schedAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('schedules')" style="margin-bottom:8px">${ic('plus')} Add Schedule</button>`;
+            const schedItemsHtml = schedules.length === 0
+                ? '<div class="empty-state" style="margin-bottom:12px">No schedules yet.</div>'
+                : schedules.map(s => {
+                    const freq = parseInt(s.frequency) || 1;
+                    const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
+                    const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
+                    const privacyTag = !s.shared ? ' ' + ic('lock') : '';
+                    const isOneTime = !!(s.seriesEnd && s.seriesEnd === s.seriesStart);
+                    const recurStr  = isOneTime ? `Once · ${s.seriesStart}` : `Every ${freq} ${unit}`;
+                    return `<div class="item">
+                        <div class="item-content">
+                            <button class="item-name-btn" onclick="openScheduleSeriesModal(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
+                            <div class="item-meta">${timeStr} · ${recurStr}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
+                        </div>
+                    </div>`;
+                }).join('');
 
-            if (schedules.length === 0) {
-                gridEl.innerHTML = addBtn + '<div class="empty-state">No schedules yet.</div>';
-                renderIcons();
-                return;
-            }
+            // ── Birthdays ──
+            const bdayAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('birthdays')" style="margin-bottom:8px">${ic('plus')} Add Birthday</button>`;
+            const bdayItemsHtml = birthdays.length === 0
+                ? '<div class="empty-state" style="margin-bottom:12px">No birthdays yet.</div>'
+                : birthdays.map(b => {
+                    const dateLabel = b.date ? formatMonthDay(b.date) : '—';
+                    return `<div class="item">
+                        <div class="item-content">
+                            <div style="display:flex;align-items:center;gap:6px;font-size:15px">
+                                <span style="background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">Birthday</span>
+                                ${escapeHtml(b.name)}
+                            </div>
+                            <div class="item-meta">${dateLabel}${b.notes ? ' · ' + escapeHtml(b.notes) : ''}</div>
+                        </div>
+                        <button onclick="deleteBirthday(${b.id})" title="Delete"
+                            style="background:none;border:none;cursor:pointer;color:#dc2626;padding:4px 8px;border-radius:6px;font-size:13px">${ic('trash-2')}</button>
+                    </div>`;
+                }).join('');
 
-            gridEl.innerHTML = addBtn + schedules.map(s => {
-                const freq = parseInt(s.frequency) || 1;
-                const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
-                const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
-                const privacyTag = !s.shared ? ' ' + ic('lock') : '';
-                const isOneTime = !!(s.seriesEnd && s.seriesEnd === s.seriesStart);
-                const recurStr  = isOneTime ? `Once · ${s.seriesStart}` : `Every ${freq} ${unit}`;
-                return `<div class="item">
-                    <div class="item-content">
-                        <button class="item-name-btn" onclick="openScheduleSeriesModal(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
-                        <div class="item-meta">${timeStr} · ${recurStr}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
-                    </div>
-                </div>`;
-            }).join('');
+            // ── Special Days / Holidays ──
+            const specAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('special-days')" style="margin-bottom:8px">${ic('plus')} Add Holiday / Red Day</button>`;
+            const specItemsHtml = specialDays.length === 0
+                ? '<div class="empty-state" style="margin-bottom:12px">No special days yet.</div>'
+                : specialDays.map(s => {
+                    const isRecurring = s.recurring === true || s.recurring === 'true';
+                    const dateLabel   = isRecurring ? formatMonthDay(s.date) + ' (annual)' : s.date;
+                    return `<div class="item">
+                        <div class="item-content">
+                            <div style="display:flex;align-items:center;gap:6px;font-size:15px">
+                                <span style="background:#d1fae5;color:#065f46;border-radius:4px;padding:1px 5px;font-size:11px;font-weight:700">${isRecurring ? 'Annual' : 'Once'}</span>
+                                ${escapeHtml(s.name)}
+                            </div>
+                            <div class="item-meta">${dateLabel}${s.notes ? ' · ' + escapeHtml(s.notes) : ''}</div>
+                        </div>
+                        <button onclick="deleteSpecialDay(${s.id})" title="Delete"
+                            style="background:none;border:none;cursor:pointer;color:#dc2626;padding:4px 8px;border-radius:6px;font-size:13px">${ic('trash-2')}</button>
+                    </div>`;
+                }).join('');
+
+            const sectionLabel = (text) =>
+                `<div style="font-size:11px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.06em;margin:16px 0 6px">${text}</div>`;
+
+            gridEl.innerHTML =
+                sectionLabel('Schedule Blocks') + schedAddBtn + schedItemsHtml +
+                sectionLabel('Birthdays')        + bdayAddBtn  + bdayItemsHtml  +
+                sectionLabel('Holidays & Red Days') + specAddBtn + specItemsHtml;
+
             renderIcons();
         }
 
@@ -3594,6 +3778,82 @@
             const on = document.getElementById('sched-onetime')?.checked;
             document.getElementById('sched-onetime-field').hidden    = !on;
             document.getElementById('sched-recurring-fields').hidden =  on;
+        }
+
+        function toggleSpecRecurring() {
+            const on = document.getElementById('spec-recurring')?.checked;
+            document.getElementById('spec-annual-field').hidden  = !on;
+            document.getElementById('spec-onetime-field').hidden =  on;
+        }
+
+        async function addBirthday() {
+            const name    = (document.getElementById('bday-name')?.value || '').trim();
+            const dateVal = document.getElementById('bday-date')?.value || '';
+            const notes   = (document.getElementById('bday-notes')?.value || '').trim();
+            const shared  = !(document.getElementById('bday-private')?.checked);
+            if (!name)    { alert('Name is required'); return; }
+            if (!dateVal) { alert('Date is required'); return; }
+            // Store only MM-DD (year-agnostic)
+            const parts = dateVal.split('-');
+            const date  = `${parts[1]}-${parts[2]}`;
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'birthday', name, date, shared, notes }),
+                });
+                if (res.ok) { closeModal(); await loadSpecials(); }
+                else alert('Failed to add birthday');
+            } catch (e) { alert('Error saving'); console.error(e); }
+        }
+
+        async function addSpecialDay() {
+            const name      = (document.getElementById('spec-name')?.value || '').trim();
+            const recurring = document.getElementById('spec-recurring')?.checked ?? true;
+            const notes     = (document.getElementById('spec-notes')?.value || '').trim();
+            const shared    = !(document.getElementById('spec-private')?.checked);
+            if (!name) { alert('Name is required'); return; }
+            let date;
+            if (recurring) {
+                const dateVal = document.getElementById('spec-annual-date')?.value || '';
+                if (!dateVal) { alert('Date is required'); return; }
+                const parts = dateVal.split('-');
+                date = `${parts[1]}-${parts[2]}`;
+            } else {
+                date = document.getElementById('spec-onetime-date')?.value || '';
+                if (!date) { alert('Date is required'); return; }
+            }
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'special-day', name, date, recurring, shared, notes }),
+                });
+                if (res.ok) { closeModal(); await loadSpecials(); }
+                else alert('Failed to add special day');
+            } catch (e) { alert('Error saving'); console.error(e); }
+        }
+
+        async function deleteBirthday(id) {
+            if (!confirm('Delete this birthday?')) return;
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'birthday', id }),
+                });
+                if (res.ok) await loadSpecials();
+                else alert('Failed to delete');
+            } catch (e) { alert('Error deleting'); console.error(e); }
+        }
+
+        async function deleteSpecialDay(id) {
+            if (!confirm('Delete this special day?')) return;
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'special-day', id }),
+                });
+                if (res.ok) await loadSpecials();
+                else alert('Failed to delete');
+            } catch (e) { alert('Error deleting'); console.error(e); }
         }
 
         // Helper: switch modal to edit panel with custom save handler
