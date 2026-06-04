@@ -3312,8 +3312,11 @@
             try {
                 const res = await fetch(`/api/specials?user=${encodeURIComponent(currentUser)}`);
                 const data = await res.json();
-                birthdays   = data.birthdays   || [];
-                specialDays = data.specialDays || [];
+                // Visibility: shared items visible to everyone; private items only to their owner.
+                // Items with no owner (created before owner tracking) are treated as shared.
+                const canSee = item => item.shared || !item.owner || item.owner === currentUser;
+                birthdays   = (data.birthdays   || []).filter(canSee);
+                specialDays = (data.specialDays || []).filter(canSee);
                 specialsLoaded = true;
                 if (activeSection === 'calendar') renderCalendar();
             } catch (e) {

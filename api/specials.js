@@ -49,13 +49,9 @@ module.exports = async (req, res) => {
       const bdayRows = await bdaySheet.getRows();
       const specRows = await specSheet.getRows();
 
-      // Visible if shared=TRUE (anyone can see) OR owner=user (private to creator)
+      // Return ALL rows — visibility filtering is done on the frontend
+      // (owner + shared fields are included so the client can filter correctly)
       const birthdays = bdayRows
-        .filter(r => {
-          const shared = r.get('Shared') === 'TRUE' || r.get('Shared') === true;
-          const owner  = r.get('Owner') || '';
-          return shared || owner === user;
-        })
         .map(r => ({
           id:     r.get('Birthday ID'),
           name:   r.get('Name') || '',
@@ -66,11 +62,6 @@ module.exports = async (req, res) => {
         }));
 
       const specialDays = specRows
-        .filter(r => {
-          const shared = r.get('Shared') === 'TRUE' || r.get('Shared') === true;
-          const owner  = r.get('Owner') || '';
-          return shared || owner === user;
-        })
         .map(r => ({
           id:        r.get('Day ID'),
           name:      r.get('Name') || '',
