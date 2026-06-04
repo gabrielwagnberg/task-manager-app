@@ -510,8 +510,9 @@
         }
 
         .modal-field textarea {
-            min-height: 80px;
-            resize: vertical;
+            min-height: 120px;
+            resize: none;
+            overflow: hidden;
         }
 
         .modal-recur-row {
@@ -1290,6 +1291,11 @@
             currentUser = name;
             localStorage.setItem('currentUser', name);
             initializeUI();
+        }
+
+        function autoResize(el) {
+            el.style.height = 'auto';
+            el.style.height = el.scrollHeight + 'px';
         }
 
         let isRefreshing = false;
@@ -2283,7 +2289,7 @@
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Note</div>
-                        <textarea id="note-content" placeholder="Write a note..."></textarea>
+                        <textarea id="note-content" placeholder="Write a note..." oninput="autoResize(this)"></textarea>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Project</div>
@@ -2846,7 +2852,7 @@
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Note</div>
-                        <textarea id="edit-content">${escapeHtml(data.content)}</textarea>
+                        <textarea id="edit-content" oninput="autoResize(this)">${escapeHtml(data.content)}</textarea>
                     </div>
                     <div class="modal-field">
                         <div class="modal-field-label">Project</div>
@@ -2859,6 +2865,7 @@
                         </label>
                     </div>
                 `;
+                setTimeout(() => { const ta = document.getElementById('edit-content'); if (ta) autoResize(ta); }, 0);
             } else {
                 // project
                 form.innerHTML = `
