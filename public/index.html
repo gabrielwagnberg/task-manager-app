@@ -3464,9 +3464,9 @@
             try {
                 const res = await fetch(`/api/specials?user=${encodeURIComponent(currentUser)}`);
                 const data = await res.json();
-                // Visibility: shared items visible to everyone; private items only to their owner.
-                // Items with no owner (created before owner tracking) are treated as shared.
-                const canSee = item => item.shared || !item.owner || item.owner === currentUser;
+                // Server already filters by visibility — this is a client-side safety net.
+                // Shared items are visible to everyone; private items only to their owner.
+                const canSee = item => item.shared || item.owner === currentUser;
                 birthdays   = (data.birthdays   || []).filter(canSee);
                 specialDays = (data.specialDays || []).filter(canSee);
                 specialsLoaded = true;
