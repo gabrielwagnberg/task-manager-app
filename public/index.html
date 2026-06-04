@@ -2312,7 +2312,7 @@
                         </select>
                     </div>
                     <div class="modal-field">
-                        <div class="modal-field-label">Time</div>
+                        <div class="modal-field-label">Time <span style="font-weight:400;text-transform:none;font-size:11px">(optional — leave blank for all-day)</span></div>
                         <div style="display:flex;gap:8px;align-items:center">
                             <input type="time" id="sched-start-time" step="300" style="flex:1">
                             <span style="color:#aaa;font-size:13px">–</span>
@@ -3432,7 +3432,7 @@
                 : visibleSchedules.map(s => {
                     const freq = parseInt(s.frequency) || 1;
                     const unit = freq === 1 ? s.rate.replace(/s$/, '') : s.rate;
-                    const timeStr = s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime;
+                    const timeStr = s.startTime ? (s.endTime ? `${s.startTime}–${s.endTime}` : s.startTime) : 'All day';
                     const privacyTag = !s.shared ? ' ' + ic('lock') : '';
                     const isOneTime = !!(s.seriesEnd && s.seriesEnd === s.seriesStart);
                     const recurStr  = isOneTime ? `Once · ${s.seriesStart}` : `Every ${freq} ${unit}`;
@@ -3517,8 +3517,6 @@
             }
 
             if (!name)        { alert('Name is required'); return; }
-            if (!startTime)   { alert('Start time is required'); return; }
-            if (!endTime)     { alert('End time is required'); return; }
             if (!seriesStart) { alert(oneTime ? 'Date is required' : 'Starting date is required'); return; }
 
             try {
@@ -3571,7 +3569,7 @@
             const isOneTime = !!(sched.seriesEnd && sched.seriesEnd === sched.seriesStart);
             const rows = [
                 ['Name',  escapeHtml(sched.name)],
-                ['Time',  `${sched.startTime} – ${sched.endTime}`],
+                ['Time',  sched.startTime ? `${sched.startTime}${sched.endTime ? ' – ' + sched.endTime : ''}` : 'All day'],
             ];
             if (isOneTime) {
                 rows.push(['Type', 'One-time block']);
