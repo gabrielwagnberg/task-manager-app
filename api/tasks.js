@@ -47,8 +47,20 @@ const rowIsRecurring = (row) => {
 const REQUIRED_HEADERS = [
   'Task ID', 'Task Name', 'Completed', 'Due Date', 'Owner', 'Shared',
   'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project', 'Priority', 'Assigned To',
-  'Start Time', 'End Time',
+  'Start Time', 'End Time', 'Counts As Point',
 ];
+
+// Get the Points sheet, creating it if it doesn't exist yet.
+const getOrCreatePointsSheet = async (doc) => {
+  const title = 'Points';
+  const headers = ['Point ID', 'User', 'Date', 'Task ID', 'Task Name'];
+  if (doc.sheetsByTitle[title]) {
+    const sheet = doc.sheetsByTitle[title];
+    await sheet.loadHeaderRow();
+    return sheet;
+  }
+  return doc.addSheet({ title, headerValues: headers });
+};
 
 // Make sure every required column exists in the header row, appending any
 // that are missing (preserves existing columns/data). Lets the recurrence
@@ -121,13 +133,14 @@ module.exports = async (req, res) => {
         assignedTo: row.get('Assigned To') || '',
         startTime: row.get('Start Time') || '',
         endTime: row.get('End Time') || '',
+        countsAsPoint: row.get('Counts As Point') === 'TRUE' || row.get('Counts As Point') === true,
       }));
 
       return res.status(200).json(tasks);
     }
 
     if (method === 'POST') {
-      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime } = req.body;
+      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint } = req.body;
 
       if (!name) {
         return res.status(400).json({ error: 'Task name is required' });
@@ -165,6 +178,7 @@ module.exports = async (req, res) => {
         'Assigned To': assignedTo || '',
         'Start Time': startTime || '',
         'End Time': endTime || '',
+        'Counts As Point': countsAsPoint ? 'TRUE' : 'FALSE',
       });
 
       return res.status(201).json({
@@ -184,6 +198,7 @@ module.exports = async (req, res) => {
         assignedTo: assignedTo || '',
         startTime: startTime || '',
         endTime: endTime || '',
+        countsAsPoint: !!countsAsPoint,
       });
     }
 
@@ -204,7 +219,7 @@ module.exports = async (req, res) => {
 
       // ── Full edit (name present in body) ──────────────────────────────────
       if (typeof body.name !== 'undefined') {
-        const { name, dueDate, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime } = body;
+        const { name, dueDate, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint } = body;
 
         if (name !== undefined) row.set('Task Name', name);
         if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
@@ -213,6 +228,7 @@ module.exports = async (req, res) => {
         if (assignedTo !== undefined) row.set('Assigned To', assignedTo || '');
         if (startTime !== undefined) row.set('Start Time', startTime || '');
         if (endTime !== undefined) row.set('End Time', endTime || '');
+        if (countsAsPoint !== undefined) row.set('Counts As Point', countsAsPoint ? 'TRUE' : 'FALSE');
 
         const isRecurring = !!recurring && !!frequency;
         if (isRecurring) {
@@ -255,23 +271,21 @@ module.exports = async (req, res) => {
           assignedTo: row.get('Assigned To') || '',
           startTime: row.get('Start Time') || '',
           endTime: row.get('End Time') || '',
+          countsAsPoint: row.get('Counts As Point') === 'TRUE',
         });
       }
 
       // ── Toggle completed ──────────────────────────────────────────────────
-      const { completed } = body;
+      const { completed, completedBy } = body;
+      const countsAsPoint = row.get('Counts As Point') === 'TRUE';
 
       if (rowIsRecurring(row) && completed) {
         // Use the client's local date if provided; fall back to server UTC date.
-        // This prevents a timezone mismatch where the server's UTC "today" differs
-        // from the user's local calendar day (e.g. past midnight in CET but still
-        // the same UTC day — or the reverse).
         const today = (body.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(body.clientToday))
           ? body.clientToday
           : todayStr();
         const rate = row.get('Rate') || 'days';
         const frequency = row.get('Frequency');
-        // Anchor to the day the user actually checked the task off, not its previous due date.
         const nextDue = computeNextDue(today, frequency, rate);
 
         row.set('Last Done', today);
@@ -279,11 +293,42 @@ module.exports = async (req, res) => {
         row.set('Completed', 'FALSE');
         await row.save();
 
+        // Log a point if this task counts toward the score.
+        if (countsAsPoint && completedBy) {
+          const pointsSheet = await getOrCreatePointsSheet(doc);
+          const pointRows = await pointsSheet.getRows();
+          const maxId = Math.max(...pointRows.map(r => parseInt(r.get('Point ID')) || 0), 0);
+          await pointsSheet.addRow({
+            'Point ID': maxId + 1,
+            'User': completedBy,
+            'Date': today,
+            'Task ID': String(id),
+            'Task Name': row.get('Task Name'),
+          });
+        }
+
         return res.status(200).json({ id, completed: false, recurring: true, lastDone: today, nextDue });
       }
 
       row.set('Completed', completed ? 'TRUE' : 'FALSE');
       await row.save();
+
+      // Log a point when completing a one-off task that counts toward the score.
+      if (completed && countsAsPoint && completedBy) {
+        const today = (body.clientToday && /^\d{4}-\d{2}-\d{2}$/.test(body.clientToday))
+          ? body.clientToday
+          : todayStr();
+        const pointsSheet = await getOrCreatePointsSheet(doc);
+        const pointRows = await pointsSheet.getRows();
+        const maxId = Math.max(...pointRows.map(r => parseInt(r.get('Point ID')) || 0), 0);
+        await pointsSheet.addRow({
+          'Point ID': maxId + 1,
+          'User': completedBy,
+          'Date': today,
+          'Task ID': String(id),
+          'Task Name': row.get('Task Name'),
+        });
+      }
 
       return res.status(200).json({ id, completed });
     }

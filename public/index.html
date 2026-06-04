@@ -711,6 +711,57 @@
             color: #888;
         }
 
+        .trophy-btn {
+            color: #d4a017;
+            cursor: pointer;
+            line-height: 1;
+            user-select: none;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+
+        .trophy-btn:hover { color: #a07010; }
+
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .leaderboard-table th {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #999;
+            padding: 6px 12px;
+            text-align: center;
+        }
+
+        .leaderboard-table th:first-child { text-align: left; }
+
+        .leaderboard-table td {
+            padding: 10px 12px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: 700;
+            color: #111;
+            border-top: 1px solid #f0f0f0;
+        }
+
+        .leaderboard-table td:first-child {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            color: #999;
+            text-align: left;
+        }
+
+        .leaderboard-winner { color: #d4a017; }
+
         .refresh-btn.spinning {
             animation: spin 0.7s linear infinite;
             color: #888;
@@ -1062,7 +1113,10 @@
         <div id="main-app" class="main-app">
             <div class="app-header">
                 <h1 class="app-title">Task Manager</h1>
-                <span class="refresh-btn" onclick="refreshAll()" title="Refresh"><i data-lucide="refresh-cw" class="icon"></i></span>
+                <div style="display:flex;align-items:center">
+                    <span class="trophy-btn" onclick="openLeaderboard()" title="Leaderboard"><i data-lucide="trophy" class="icon"></i></span>
+                    <span class="refresh-btn" onclick="refreshAll()" title="Refresh"><i data-lucide="refresh-cw" class="icon"></i></span>
+                </div>
             </div>
 
             <!-- Main Tab Navigation -->
@@ -1212,6 +1266,14 @@
                     <button class="modal-btn modal-btn-danger" onclick="scheduleDeleteSeries()">Delete series</button>
                 </div>
             </div>
+
+            <!-- Leaderboard -->
+            <div id="modal-leaderboard" hidden>
+                <div id="modal-leaderboard-content"></div>
+                <div class="modal-actions">
+                    <button class="modal-btn modal-btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1246,6 +1308,8 @@
         let projectsLoaded = false;
         let schedulesLoaded = false;
         let schedules = [];
+        let points = [];
+        let pointsLoaded = false;
         let scheduleOverrides = [];
         let modalSchedule = null; // { schedule, dateStr } — set when schedule modal is open
         let calendarYear  = new Date().getFullYear();
@@ -1310,6 +1374,7 @@
                 await loadSchedules();
                 if (shoppingLoaded) await loadShopping();
                 if (notesLoaded) await loadNotes();
+                if (pointsLoaded) await loadPoints();
             } finally {
                 isRefreshing = false;
                 if (icon) icon.classList.remove('spinning');
@@ -1573,6 +1638,8 @@
             // If set, the backend uses it directly; if blank, it auto-computes.
             const dueDate = recurring ? '' : dueInput.value;
             const nextDue = recurring ? dueInput.value : '';
+            const countsAsPointInput = document.getElementById('task-counts-as-point');
+            const countsAsPoint = countsAsPointInput ? countsAsPointInput.checked : false;
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -1583,7 +1650,7 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue, startTime, endTime }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue, startTime, endTime, countsAsPoint }),
                 });
 
                 if (response.ok) {
@@ -1630,7 +1697,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     // Send the client's local date so the server anchors recurrence to the
                     // user's calendar day, not the UTC day (which can differ by 1–2 hours).
-                    body: JSON.stringify({ id, completed, clientToday: todayStr() }),
+                    body: JSON.stringify({ id, completed, clientToday: todayStr(), completedBy: currentUser }),
                 });
 
                 if (response.ok) {
@@ -1999,6 +2066,73 @@
             return proj !== '' && proj === String(activeProjectFilter);
         }
 
+        async function loadPoints() {
+            try {
+                const response = await fetch('/api/points');
+                if (response.ok) {
+                    points = await response.json();
+                    pointsLoaded = true;
+                }
+            } catch (e) {
+                console.error('loadPoints error', e);
+            }
+        }
+
+        async function openLeaderboard() {
+            if (!pointsLoaded) await loadPoints();
+
+            // Date helpers
+            const today = todayStr();
+            const d = new Date();
+            // Monday of current week
+            const weekStart = new Date(d);
+            weekStart.setDate(d.getDate() - (d.getDay() + 6) % 7);
+            const weekStartStr = dateToStr(weekStart);
+            // First day of current month
+            const monthStartStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+
+            const count = (user, from, to) => points.filter(p =>
+                p.user === user &&
+                (!from || p.date >= from) &&
+                (!to   || p.date <= to)
+            ).length;
+
+            const users = ['Gabriel', 'Thomas'];
+            const periods = [
+                { label: 'Today',      from: today,          to: today },
+                { label: 'This week',  from: weekStartStr,   to: null  },
+                { label: 'This month', from: monthStartStr,  to: null  },
+                { label: 'All time',   from: null,           to: null  },
+            ];
+
+            const headerCells = users.map(u => `<th>${u}</th>`).join('');
+            const bodyRows = periods.map(({ label, from, to }) => {
+                const counts = users.map(u => count(u, from, to));
+                const max = Math.max(...counts);
+                const cells = counts.map((c, i) => {
+                    const winner = c === max && c > 0;
+                    return `<td class="${winner ? 'leaderboard-winner' : ''}">${c}</td>`;
+                }).join('');
+                return `<tr><td>${label}</td>${cells}</tr>`;
+            }).join('');
+
+            document.getElementById('modal-leaderboard-content').innerHTML = `
+                <table class="leaderboard-table">
+                    <thead><tr><th></th>${headerCells}</tr></thead>
+                    <tbody>${bodyRows}</tbody>
+                </table>
+            `;
+
+            // Show leaderboard panel, hide all others
+            document.getElementById('modal-title').textContent = 'Leaderboard';
+            ['modal-detail','modal-edit','modal-add','modal-day','modal-schedule'].forEach(id => {
+                document.getElementById(id).hidden = true;
+            });
+            document.getElementById('modal-leaderboard').hidden = false;
+            document.getElementById('modal-overlay').classList.add('open');
+            if (window.lucide) lucide.createIcons();
+        }
+
         async function loadProjects() {
             try {
                 const response = await fetch(`/api/projects?user=${encodeURIComponent(currentUser)}`);
@@ -2261,6 +2395,12 @@
                                 <option value="months">months</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="task-counts-as-point">
+                            <span class="modal-field-label" style="margin:0">Counts as point ${ic('trophy')}</span>
+                        </label>
                     </div>
                 `;
             } else if (section === 'shopping') {
@@ -2692,6 +2832,7 @@
                     rows.push(['Time', timeStr]);
                 }
                 rows.push(['Project', projectName(data.project) || '—']);
+                if (data.countsAsPoint) rows.push(['Score', ic('trophy') + ' Counts as point']);
                 rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             } else if (type === 'shopping') {
@@ -2810,6 +2951,12 @@
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                             <input type="checkbox" id="edit-private" ${!data.shared ? 'checked' : ''}>
                             <span class="modal-field-label" style="margin:0">Private</span>
+                        </label>
+                    </div>
+                    <div class="modal-field">
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                            <input type="checkbox" id="edit-counts-as-point" ${data.countsAsPoint ? 'checked' : ''}>
+                            <span class="modal-field-label" style="margin:0">Counts as point ${ic('trophy')}</span>
                         </label>
                     </div>
                 `;
@@ -2936,6 +3083,7 @@
                     rate: recurring ? document.getElementById('edit-rate').value : '',
                     startTime: document.getElementById('edit-start-time')?.value || '',
                     endTime:   document.getElementById('edit-end-time')?.value   || '',
+                    countsAsPoint: document.getElementById('edit-counts-as-point')?.checked || false,
                 };
                 url = '/api/tasks';
                 successReload = loadTasks;
