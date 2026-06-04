@@ -2165,6 +2165,7 @@
         // ===== ADD MODAL =====
 
         let addModalSection = null;
+        let editingSpecial  = null; // { type: 'birthday'|'special-day', id } when editing; null when adding
 
         const addModalTitles  = { tasks: 'New Task', shopping: 'New Item', notes: 'New Note', projects: 'New Project', schedules: 'New Schedule', birthdays: 'New Birthday', 'special-days': 'New Holiday / Red Day' };
         const addModalBtnText = { tasks: 'Add Task', shopping: 'Add Item', notes: 'Add Note', projects: 'Add Project', schedules: 'Add Schedule', birthdays: 'Add Birthday', 'special-days': 'Add' };
@@ -2468,6 +2469,11 @@
         }
 
         function submitAddForm() {
+            if (editingSpecial) {
+                if (editingSpecial.type === 'birthday')    saveEditBirthday();
+                else if (editingSpecial.type === 'special-day') saveEditSpecialDay();
+                return;
+            }
             if (addModalSection === 'tasks')       addTask();
             else if (addModalSection === 'shopping')   addShoppingItem();
             else if (addModalSection === 'notes')      addNote();
@@ -2632,9 +2638,10 @@
             document.getElementById('modal-add').hidden      = true;
             document.getElementById('modal-day').hidden      = true;
             document.getElementById('modal-schedule').hidden = true;
-            modalItem      = null;
-            modalSchedule  = null;
+            modalItem       = null;
+            modalSchedule   = null;
             addModalSection = null;
+            editingSpecial  = null;
         }
 
         function handleModalOverlayClick(e) {
@@ -3439,10 +3446,11 @@
             const bdayItemsHtml = birthdays.length === 0
                 ? '<div class="empty-state" style="margin-bottom:12px">No birthdays yet.</div>'
                 : birthdays.map(b => {
-                    const dateLabel = b.date ? formatMonthDay(b.date) : '—';
+                    const dateLabel  = b.date ? formatMonthDay(b.date) : '—';
+                    const privacyTag = !b.shared ? ' ' + ic('lock') : '';
                     return `<div class="item">
                         <div class="item-content">
-                            <div style="font-size:15px">${escapeHtml(b.name)}</div>
+                            <button class="item-name-btn" onclick="openEditBirthday(${b.id})">${escapeHtml(b.name)}${privacyTag}</button>
                             <div class="item-meta">${dateLabel}${b.notes ? ' · ' + escapeHtml(b.notes) : ''}</div>
                         </div>
                         <button onclick="deleteBirthday(${b.id})" title="Delete"
@@ -3457,9 +3465,10 @@
                 : specialDays.map(s => {
                     const isRecurring = s.recurring === true || s.recurring === 'true';
                     const dateLabel   = isRecurring ? formatMonthDay(s.date) + ' (annual)' : s.date;
+                    const privacyTag  = !s.shared ? ' ' + ic('lock') : '';
                     return `<div class="item">
                         <div class="item-content">
-                            <div style="font-size:15px">${escapeHtml(s.name)}</div>
+                            <button class="item-name-btn" onclick="openEditSpecialDay(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
                             <div class="item-meta">${dateLabel}${s.notes ? ' · ' + escapeHtml(s.notes) : ''}</div>
                         </div>
                         <button onclick="deleteSpecialDay(${s.id})" title="Delete"
@@ -3851,7 +3860,7 @@
             try {
                 const res = await fetch('/api/specials', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resource: 'birthday', name, date, shared, notes }),
+                    body: JSON.stringify({ resource: 'birthday', name, date, owner: currentUser, shared, notes }),
                 });
                 if (res.ok) { closeModal(); await loadSpecials(); }
                 else alert('Failed to add birthday');
@@ -3877,7 +3886,7 @@
             try {
                 const res = await fetch('/api/specials', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resource: 'special-day', name, date, recurring, shared, notes }),
+                    body: JSON.stringify({ resource: 'special-day', name, date, recurring, owner: currentUser, shared, notes }),
                 });
                 if (res.ok) { closeModal(); await loadSpecials(); }
                 else alert('Failed to add special day');
@@ -3906,6 +3915,106 @@
                 if (res.ok) await loadSpecials();
                 else alert('Failed to delete');
             } catch (e) { alert('Error deleting'); console.error(e); }
+        }
+
+        // ── Edit birthdays ────────────────────────────────────────────────────
+
+        function openEditBirthday(id) {
+            const b = birthdays.find(x => String(x.id) === String(id));
+            if (!b) return;
+            editingSpecial = { type: 'birthday', id };
+            openAddModal('birthdays');
+            document.getElementById('modal-title').textContent = 'Edit Birthday';
+            document.getElementById('modal-add-submit-btn').textContent = 'Save';
+            // Pre-fill: date input needs YYYY-MM-DD; store as MM-DD so use placeholder year 2000
+            const nameEl    = document.getElementById('bday-name');
+            const dateEl    = document.getElementById('bday-date');
+            const notesEl   = document.getElementById('bday-notes');
+            const privateEl = document.getElementById('bday-private');
+            if (nameEl)    nameEl.value      = b.name;
+            if (dateEl)    dateEl.value      = `2000-${b.date}`;
+            if (notesEl)   notesEl.value     = b.notes || '';
+            if (privateEl) privateEl.checked = !b.shared;
+        }
+
+        async function saveEditBirthday() {
+            const name    = (document.getElementById('bday-name')?.value || '').trim();
+            const dateVal = document.getElementById('bday-date')?.value || '';
+            const notes   = (document.getElementById('bday-notes')?.value || '').trim();
+            const shared  = !(document.getElementById('bday-private')?.checked);
+            if (!name)    { alert('Name is required'); return; }
+            if (!dateVal) { alert('Date is required'); return; }
+            const parts = dateVal.split('-');
+            const date  = `${parts[1]}-${parts[2]}`;
+            const id    = editingSpecial.id;
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'birthday', id, name, date, shared, notes }),
+                });
+                if (res.ok) { closeModal(); await loadSpecials(); }
+                else alert('Failed to save');
+            } catch (e) { alert('Error saving'); console.error(e); }
+        }
+
+        // ── Edit special days ─────────────────────────────────────────────────
+
+        function openEditSpecialDay(id) {
+            const s = specialDays.find(x => String(x.id) === String(id));
+            if (!s) return;
+            editingSpecial = { type: 'special-day', id };
+            openAddModal('special-days');
+            document.getElementById('modal-title').textContent = 'Edit Holiday / Red Day';
+            document.getElementById('modal-add-submit-btn').textContent = 'Save';
+            const nameEl    = document.getElementById('spec-name');
+            const recurEl   = document.getElementById('spec-recurring');
+            const notesEl   = document.getElementById('spec-notes');
+            const privateEl = document.getElementById('spec-private');
+            if (nameEl)    nameEl.value      = s.name;
+            if (notesEl)   notesEl.value     = s.notes || '';
+            if (privateEl) privateEl.checked = !s.shared;
+            const isRecurring = s.recurring === true || s.recurring === 'true';
+            if (recurEl) {
+                recurEl.checked = isRecurring;
+                toggleSpecRecurring();
+            }
+            if (isRecurring) {
+                const parts   = s.date.split('-');
+                const monthEl = document.getElementById('spec-annual-month');
+                const dayEl   = document.getElementById('spec-annual-day');
+                if (monthEl) monthEl.value = parts[0];
+                if (dayEl)   dayEl.value   = parts[1];
+            } else {
+                const dateEl = document.getElementById('spec-onetime-date');
+                if (dateEl) dateEl.value = s.date;
+            }
+        }
+
+        async function saveEditSpecialDay() {
+            const name      = (document.getElementById('spec-name')?.value || '').trim();
+            const recurring = document.getElementById('spec-recurring')?.checked ?? true;
+            const notes     = (document.getElementById('spec-notes')?.value || '').trim();
+            const shared    = !(document.getElementById('spec-private')?.checked);
+            if (!name) { alert('Name is required'); return; }
+            let date;
+            if (recurring) {
+                const month = document.getElementById('spec-annual-month')?.value || '';
+                const day   = document.getElementById('spec-annual-day')?.value   || '';
+                if (!month || !day) { alert('Month and day are required'); return; }
+                date = `${month}-${day}`;
+            } else {
+                date = document.getElementById('spec-onetime-date')?.value || '';
+                if (!date) { alert('Date is required'); return; }
+            }
+            const id = editingSpecial.id;
+            try {
+                const res = await fetch('/api/specials', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ resource: 'special-day', id, name, date, recurring, shared, notes }),
+                });
+                if (res.ok) { closeModal(); await loadSpecials(); }
+                else alert('Failed to save');
+            } catch (e) { alert('Error saving'); console.error(e); }
         }
 
         // Helper: switch modal to edit panel with custom save handler

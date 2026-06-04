@@ -1,8 +1,8 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 
-const BIRTHDAY_HEADERS    = ['Birthday ID', 'Name', 'Date', 'Shared', 'Notes'];
-const SPECIAL_DAY_HEADERS = ['Day ID', 'Name', 'Date', 'Recurring', 'Shared', 'Notes'];
+const BIRTHDAY_HEADERS    = ['Birthday ID', 'Name', 'Date', 'Owner', 'Shared', 'Notes'];
+const SPECIAL_DAY_HEADERS = ['Day ID', 'Name', 'Date', 'Recurring', 'Owner', 'Shared', 'Notes'];
 
 const ensureHeaders = async (sheet, required) => {
   await sheet.loadHeaderRow();
@@ -39,6 +39,8 @@ module.exports = async (req, res) => {
 
     // ── GET: return birthdays and special days visible to the user ──────────
     if (method === 'GET') {
+      const user = req.query.user || '';
+
       const bdaySheet = await getOrCreateSheet(doc, 'Birthdays', BIRTHDAY_HEADERS);
       const specSheet = await getOrCreateSheet(doc, 'Special Days', SPECIAL_DAY_HEADERS);
       await ensureHeaders(bdaySheet, BIRTHDAY_HEADERS);
@@ -47,23 +49,34 @@ module.exports = async (req, res) => {
       const bdayRows = await bdaySheet.getRows();
       const specRows = await specSheet.getRows();
 
+      // Visible if shared=TRUE (anyone can see) OR owner=user (private to creator)
       const birthdays = bdayRows
-        .filter(r => r.get('Shared') === 'TRUE' || r.get('Shared') === true)
+        .filter(r => {
+          const shared = r.get('Shared') === 'TRUE' || r.get('Shared') === true;
+          const owner  = r.get('Owner') || '';
+          return shared || owner === user;
+        })
         .map(r => ({
           id:     r.get('Birthday ID'),
           name:   r.get('Name') || '',
           date:   r.get('Date') || '',
+          owner:  r.get('Owner') || '',
           shared: r.get('Shared') === 'TRUE' || r.get('Shared') === true,
           notes:  r.get('Notes') || '',
         }));
 
       const specialDays = specRows
-        .filter(r => r.get('Shared') === 'TRUE' || r.get('Shared') === true)
+        .filter(r => {
+          const shared = r.get('Shared') === 'TRUE' || r.get('Shared') === true;
+          const owner  = r.get('Owner') || '';
+          return shared || owner === user;
+        })
         .map(r => ({
           id:        r.get('Day ID'),
           name:      r.get('Name') || '',
           date:      r.get('Date') || '',
           recurring: r.get('Recurring') === 'TRUE' || r.get('Recurring') === true,
+          owner:     r.get('Owner') || '',
           shared:    r.get('Shared') === 'TRUE' || r.get('Shared') === true,
           notes:     r.get('Notes') || '',
         }));
@@ -76,7 +89,7 @@ module.exports = async (req, res) => {
       const { resource } = req.body;
 
       if (resource === 'birthday') {
-        const { name, date, shared, notes } = req.body;
+        const { name, date, owner, shared, notes } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
         if (!date) return res.status(400).json({ error: 'Date is required' });
 
@@ -89,14 +102,15 @@ module.exports = async (req, res) => {
           'Birthday ID': newId,
           Name:   name,
           Date:   date,
+          Owner:  owner || '',
           Shared: shared ? 'TRUE' : 'FALSE',
           Notes:  notes || '',
         });
-        return res.status(201).json({ id: newId, name, date, shared: !!shared, notes: notes || '' });
+        return res.status(201).json({ id: newId, name, date, owner: owner || '', shared: !!shared, notes: notes || '' });
       }
 
       if (resource === 'special-day') {
-        const { name, date, recurring, shared, notes } = req.body;
+        const { name, date, recurring, owner, shared, notes } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
         if (!date) return res.status(400).json({ error: 'Date is required' });
 
@@ -110,10 +124,49 @@ module.exports = async (req, res) => {
           Name:       name,
           Date:       date,
           Recurring:  recurring ? 'TRUE' : 'FALSE',
+          Owner:      owner || '',
           Shared:     shared ? 'TRUE' : 'FALSE',
           Notes:      notes || '',
         });
-        return res.status(201).json({ id: newId, name, date, recurring: !!recurring, shared: !!shared, notes: notes || '' });
+        return res.status(201).json({ id: newId, name, date, recurring: !!recurring, owner: owner || '', shared: !!shared, notes: notes || '' });
+      }
+
+      return res.status(400).json({ error: 'Unknown resource' });
+    }
+
+    // ── PUT: edit a birthday or special day ─────────────────────────────────
+    if (method === 'PUT') {
+      const { resource, id } = req.body;
+
+      if (resource === 'birthday') {
+        const { name, date, shared, notes } = req.body;
+        const bdaySheet = await getOrCreateSheet(doc, 'Birthdays', BIRTHDAY_HEADERS);
+        await ensureHeaders(bdaySheet, BIRTHDAY_HEADERS);
+        const rows = await bdaySheet.getRows();
+        const row  = rows.find(r => r.get('Birthday ID') == id);
+        if (!row) return res.status(404).json({ error: 'Birthday not found' });
+        if (name  !== undefined) row.set('Name',   name);
+        if (date  !== undefined) row.set('Date',   date);
+        if (notes !== undefined) row.set('Notes',  notes || '');
+        if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        await row.save();
+        return res.status(200).json({ id });
+      }
+
+      if (resource === 'special-day') {
+        const { name, date, recurring, shared, notes } = req.body;
+        const specSheet = await getOrCreateSheet(doc, 'Special Days', SPECIAL_DAY_HEADERS);
+        await ensureHeaders(specSheet, SPECIAL_DAY_HEADERS);
+        const rows = await specSheet.getRows();
+        const row  = rows.find(r => r.get('Day ID') == id);
+        if (!row) return res.status(404).json({ error: 'Special day not found' });
+        if (name      !== undefined) row.set('Name',      name);
+        if (date      !== undefined) row.set('Date',      date);
+        if (recurring !== undefined) row.set('Recurring', recurring ? 'TRUE' : 'FALSE');
+        if (shared    !== undefined) row.set('Shared',    shared ? 'TRUE' : 'FALSE');
+        if (notes     !== undefined) row.set('Notes',     notes || '');
+        await row.save();
+        return res.status(200).json({ id });
       }
 
       return res.status(400).json({ error: 'Unknown resource' });
