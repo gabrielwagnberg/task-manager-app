@@ -28,8 +28,8 @@ const DIMS = {
     accessoryRectangular: { w: 150, h: 60  },
     accessoryCircular:    { w: 68,  h: 68  },
 };
-const WF  = config.widgetFamily || 'medium';
-const DIM = DIMS[WF] || DIMS.medium;
+const WF       = config.widgetFamily || 'medium';
+const DIM      = DIMS[WF] || DIMS.medium;
 const IS_LARGE = WF === 'large' || WF === 'extraLarge';
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -55,18 +55,18 @@ function isOccurrence(s, dateStr) {
 }
 
 // ── Data fetch ────────────────────────────────────────────────────────────────
-// NOTE: Scriptable's Request.loadJSON() does not work with Promise.all().
-//       Each request must be awaited individually and sequentially.
+// NOTE: Scriptable's Request.loadJSON() does NOT work with Promise.all() —
+//       each request must be awaited individually.
 async function fetchAll() {
     try {
         const tasksReq = new Request(`${API_URL}/tasks?user=${encodeURIComponent(USER)}`);
-        const tasks = await tasksReq.loadJSON();
+        const tasks    = await tasksReq.loadJSON();
 
         const schedsReq = new Request(`${API_URL}/schedules?user=${encodeURIComponent(USER)}`);
         const schedData = await schedsReq.loadJSON();
 
         const specialsReq = new Request(`${API_URL}/specials?user=${encodeURIComponent(USER)}`);
-        const specData = await specialsReq.loadJSON();
+        const specData    = await specialsReq.loadJSON();
 
         return {
             tasks,
@@ -76,6 +76,7 @@ async function fetchAll() {
             specialDays: specData.specialDays || [],
         };
     } catch (e) {
+        // Return empty data — calendar will still render (just no dots)
         return { tasks:[], schedules:[], overrides:[], birthdays:[], specialDays:[] };
     }
 }
@@ -85,16 +86,16 @@ function buildDayDots(data, year, month, daysInMonth, today) {
     const result = {}; // day number → array of hex colour strings
 
     for (let d = 1; d <= daysInMonth; d++) {
-        const ds  = `${year}-${pad(month+1)}-${pad(d)}`;
-        const md  = `${pad(month+1)}-${pad(d)}`;
+        const ds   = `${year}-${pad(month+1)}-${pad(d)}`;
+        const md   = `${pad(month+1)}-${pad(d)}`;
         const dots = [];
 
-        // Birthdays — light yellow dot
+        // Birthdays — amber/yellow
         data.birthdays.forEach(b => {
             if (b.date === md) dots.push('#f59e0b');
         });
 
-        // Special days / holidays — mint green dot
+        // Holidays / special days — mint green
         data.specialDays.forEach(s => {
             const match = (s.recurring === true || s.recurring === 'true')
                 ? s.date === md
@@ -102,7 +103,7 @@ function buildDayDots(data, year, month, daysInMonth, today) {
             if (match) dots.push('#10b981');
         });
 
-        // Schedule blocks — purple dot
+        // Schedule blocks — purple
         data.schedules.forEach(s => {
             if (!isOccurrence(s, ds)) return;
             const ov = data.overrides.find(o =>
@@ -111,12 +112,12 @@ function buildDayDots(data, year, month, daysInMonth, today) {
             dots.push('#7c3aed');
         });
 
-        // Tasks — colour by owner/shared (match app colours)
+        // Tasks — colour by assignedTo / shared
         data.tasks.forEach(t => {
             if (t.completed) return;
             let date = t.recurring ? t.nextDue : t.dueDate;
             if (!date) return;
-            if (t.recurring && date < today) date = today; // overdue → show today
+            if (t.recurring && date < today) date = today; // overdue → pin to today
             if (date !== ds) return;
             const color = t.assignedTo === 'Thomas'  ? '#818cf8'
                         : t.assignedTo === 'Gabriel' ? '#fbbf24'
@@ -130,163 +131,181 @@ function buildDayDots(data, year, month, daysInMonth, today) {
     return result;
 }
 
-// ── Build calendar HTML ───────────────────────────────────────────────────────
-function buildHTML(data, today) {
-    const now          = new Date();
-    const year         = now.getFullYear();
-    const month        = now.getMonth(); // 0–11
-    const daysInMonth  = new Date(year, month + 1, 0).getDate();
-    const firstDow     = new Date(year, month, 1).getDay();
-    const startPad     = (firstDow + 6) % 7; // Mon=0 … Sun=6
-    const prevDays     = new Date(year, month, 0).getDate();
+// ── Draw calendar with DrawContext (no WebView / no snapshot) ─────────────────
+// DrawContext is Scriptable's native canvas API — reliable in all widget families.
+function drawCalendar(data, today) {
+    const W = DIM.w;
+    const H = DIM.h;
 
-    const MONTH_NAMES  = ['January','February','March','April','May','June',
-                          'July','August','September','October','November','December'];
+    const now         = new Date();
+    const year        = now.getFullYear();
+    const month       = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDow    = new Date(year, month, 1).getDay();
+    const startPad    = (firstDow + 6) % 7; // Mon=0 … Sun=6
+    const prevDays    = new Date(year, month, 0).getDate();
 
+    const MONTH_NAMES = ['January','February','March','April','May','June',
+                         'July','August','September','October','November','December'];
+
+    // ── Layout constants (medium vs large) ───────────────────────────────────
+    const HEADER_H = IS_LARGE ? 26 : 18;
+    const DOW_H    = IS_LARGE ? 14 : 11;
+    const GRID_Y   = HEADER_H + DOW_H;
+    const CELL_W   = W / 7;
+    const numRows  = Math.ceil((startPad + daysInMonth) / 7);
+    const CELL_H   = (H - GRID_Y) / numRows;
+
+    const HEADER_SZ = IS_LARGE ? 13 : 10;
+    const USER_SZ   = IS_LARGE ? 10 :  8;
+    const DOW_SZ    = IS_LARGE ?  8 :  6;
+    const NUM_SZ    = IS_LARGE ? 11 :  8;
+    const DOT_D     = IS_LARGE ?  5 :  3;   // dot diameter
+    const TODAY_D   = IS_LARGE ? 16 : 12;   // today-circle diameter
+    const MAX_DOTS  = IS_LARGE ?  5 :  3;
+
+    // ── Canvas ────────────────────────────────────────────────────────────────
+    const dc = new DrawContext();
+    dc.size = new Size(W, H);
+    dc.opaque = true;
+    dc.respectScreenScale = true;
+
+    // Background
+    dc.setFillColor(Color.white());
+    dc.fillRect(new Rect(0, 0, W, H));
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    // Month + year (left)
+    dc.setTextColor(new Color('#1a1a1a'));
+    dc.setFont(Font.boldSystemFont(HEADER_SZ));
+    dc.setTextAlignedLeft();
+    dc.drawTextInRect(
+        `${MONTH_NAMES[month]} ${year}`,
+        new Rect(6, (HEADER_H - HEADER_SZ) / 2, W * 0.65, HEADER_SZ + 4)
+    );
+
+    // User name (right)
+    dc.setTextColor(new Color('#aaaaaa'));
+    dc.setFont(Font.systemFont(USER_SZ));
+    dc.setTextAlignedRight();
+    dc.drawTextInRect(
+        USER,
+        new Rect(W * 0.55, (HEADER_H - USER_SZ) / 2, W * 0.42, USER_SZ + 4)
+    );
+
+    // Header separator line
+    dc.setFillColor(new Color('#f0f0f0'));
+    dc.fillRect(new Rect(0, HEADER_H, W, 1));
+
+    // ── Day-of-week row ───────────────────────────────────────────────────────
+    const DAY_LABELS = ['M','T','W','T','F','S','S'];
+    dc.setTextColor(new Color('#aaaaaa'));
+    dc.setFont(Font.boldSystemFont(DOW_SZ));
+    dc.setTextAlignedCenter();
+    for (let i = 0; i < 7; i++) {
+        dc.drawTextInRect(
+            DAY_LABELS[i],
+            new Rect(i * CELL_W, HEADER_H + 1 + (DOW_H - DOW_SZ) / 2, CELL_W, DOW_SZ + 2)
+        );
+    }
+
+    // DOW separator
+    dc.setFillColor(new Color('#eeeeee'));
+    dc.fillRect(new Rect(0, GRID_Y - 1, W, 1));
+
+    // ── Per-day dot data ──────────────────────────────────────────────────────
     const dayDots = buildDayDots(data, year, month, daysInMonth, today);
 
-    // Sizing — scale up for large widgets
-    const cellH    = IS_LARGE ? 42 : 20;
-    const numSz    = IS_LARGE ? 11 : 8;
-    const dotSz    = IS_LARGE ?  6 : 4;
-    const headerH  = IS_LARGE ? 30 : 18;
-    const headerSz = IS_LARGE ? 13 : 10;
-    const dhSz     = IS_LARGE ?  9 : 7;
-    const dhPad    = IS_LARGE ?  4 : 2;
+    // ── Draw one calendar cell ────────────────────────────────────────────────
+    function drawCell(col, row, dayNum, isCurrentMonth, isToday) {
+        const x = col * CELL_W;
+        const y = GRID_Y + row * CELL_H;
 
-    // Day-of-week header row
-    const dayLabels = ['M','T','W','T','F','S','S'];
-    let gridHtml = dayLabels
-        .map(l => `<div class="dh">${l}</div>`)
-        .join('');
+        // Cell background
+        if (isToday) {
+            dc.setFillColor(new Color('#eff6ff'));
+        } else if (!isCurrentMonth) {
+            dc.setFillColor(new Color('#f9f9f9'));
+        } else {
+            dc.setFillColor(Color.white());
+        }
+        dc.fillRect(new Rect(x, y, CELL_W, CELL_H));
 
-    // Leading padding (previous month's tail)
+        // Grid lines (right edge + bottom edge)
+        dc.setFillColor(new Color('#eeeeee'));
+        if (col < 6) dc.fillRect(new Rect(x + CELL_W - 0.5, y, 0.5, CELL_H));
+        dc.fillRect(new Rect(x, y + CELL_H - 0.5, CELL_W, 0.5));
+
+        // ── Day number ────────────────────────────────────────────────────────
+        if (isToday) {
+            // Blue filled circle behind the number
+            const cx = x + CELL_W * 0.22;
+            const cy = y + 2 + TODAY_D / 2;
+            dc.setFillColor(new Color('#2563eb'));
+            dc.fillEllipse(new Rect(cx - TODAY_D / 2, cy - TODAY_D / 2, TODAY_D, TODAY_D));
+            dc.setTextColor(Color.white());
+            dc.setFont(Font.boldSystemFont(NUM_SZ));
+            dc.setTextAlignedCenter();
+            dc.drawTextInRect(
+                String(dayNum),
+                new Rect(cx - TODAY_D / 2, cy - NUM_SZ / 2 - 0.5, TODAY_D, NUM_SZ + 2)
+            );
+        } else {
+            dc.setTextColor(isCurrentMonth ? new Color('#1a1a1a') : new Color('#cccccc'));
+            dc.setFont(Font.systemFont(NUM_SZ));
+            dc.setTextAlignedLeft();
+            dc.drawTextInRect(
+                String(dayNum),
+                new Rect(x + 3, y + 2, CELL_W * 0.6, NUM_SZ + 2)
+            );
+        }
+
+        // ── Coloured dots (current month only) ────────────────────────────────
+        if (isCurrentMonth && dayDots[dayNum] && dayDots[dayNum].length > 0) {
+            const dots         = dayDots[dayNum].slice(0, MAX_DOTS);
+            const totalDotsW   = dots.length * DOT_D + (dots.length - 1) * 2;
+            const dotStartX    = x + (CELL_W - totalDotsW) / 2;
+            const dotY         = y + CELL_H - DOT_D - 3;
+            dots.forEach((color, i) => {
+                dc.setFillColor(new Color(color));
+                dc.fillEllipse(new Rect(
+                    dotStartX + i * (DOT_D + 2),
+                    dotY,
+                    DOT_D,
+                    DOT_D
+                ));
+            });
+        }
+    }
+
+    // ── Lay out all cells ─────────────────────────────────────────────────────
+    let col = 0, row = 0;
+
+    // Leading padding (prev month's tail days)
     for (let i = startPad - 1; i >= 0; i--) {
-        gridHtml += `<div class="dc other"><span class="dn">${prevDays - i}</span></div>`;
+        drawCell(col, row, prevDays - i, false, false);
+        col++;
+        if (col === 7) { col = 0; row++; }
     }
 
-    // Current month days
+    // Current month
     for (let d = 1; d <= daysInMonth; d++) {
-        const ds      = `${year}-${pad(month+1)}-${pad(d)}`;
-        const isToday = ds === today;
-        const dots    = (dayDots[d] || []).slice(0, IS_LARGE ? 6 : 3);
-        const dotHtml = dots.map(c =>
-            `<span class="dot" style="background:${c}"></span>`
-        ).join('');
-
-        gridHtml += `
-            <div class="dc${isToday ? ' today-cell' : ''}">
-                <span class="dn${isToday ? ' today-num' : ''}">${d}</span>
-                <div class="dots">${dotHtml}</div>
-            </div>`;
+        const ds = `${year}-${pad(month+1)}-${pad(d)}`;
+        drawCell(col, row, d, true, ds === today);
+        col++;
+        if (col === 7) { col = 0; row++; }
     }
 
-    // Trailing padding
-    const total    = startPad + daysInMonth;
-    const trailing = (7 - (total % 7)) % 7;
-    for (let d = 1; d <= trailing; d++) {
-        gridHtml += `<div class="dc other"><span class="dn">${d}</span></div>`;
+    // Trailing padding (next month's leading days)
+    let trail = 1;
+    while (col > 0) {
+        drawCell(col, row, trail, false, false);
+        col++;
+        trail++;
+        if (col === 7) { col = 0; row++; }
     }
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=${DIM.w}, initial-scale=1.0">
-<style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-    width: ${DIM.w}px;
-    height: ${DIM.h}px;
-    background: #ffffff;
-    font-family: -apple-system, sans-serif;
-    overflow: hidden;
-}
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    height: ${headerH}px;
-    padding: 0 ${IS_LARGE ? 10 : 7}px;
-    border-bottom: 1px solid #f0f0f0;
-}
-.title {
-    font-weight: 700;
-    font-size: ${headerSz}px;
-    color: #1a1a1a;
-}
-.user {
-    font-size: ${dhSz + 1}px;
-    color: #aaaaaa;
-}
-.grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 1px;
-    background: #eeeeee;
-    height: calc(${DIM.h}px - ${headerH}px);
-}
-.dh {
-    background: #f9f9f9;
-    text-align: center;
-    font-size: ${dhSz}px;
-    font-weight: 700;
-    color: #aaaaaa;
-    padding: ${dhPad}px 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-.dc {
-    background: #ffffff;
-    padding: ${IS_LARGE ? '3px 4px' : '1px 2px'};
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    min-height: ${cellH}px;
-}
-.dc.today-cell { background: #eff6ff; }
-.dc.other .dn  { color: #cccccc; }
-.dn {
-    font-size: ${numSz}px;
-    font-weight: 500;
-    color: #1a1a1a;
-    line-height: 1;
-    min-width: ${numSz + 4}px;
-    text-align: center;
-}
-.dn.today-num {
-    background: #2563eb;
-    color: #ffffff;
-    border-radius: 50%;
-    width: ${numSz + 5}px;
-    height: ${numSz + 5}px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 700;
-}
-.dots {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1px;
-    margin-top: 2px;
-}
-.dot {
-    width: ${dotSz}px;
-    height: ${dotSz}px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-</style>
-</head>
-<body>
-<div class="header">
-    <span class="title">${MONTH_NAMES[month]} ${year}</span>
-    <span class="user">${USER}</span>
-</div>
-<div class="grid">${gridHtml}</div>
-</body>
-</html>`;
+    return dc.getImage();
 }
 
 // ── Build widget ──────────────────────────────────────────────────────────────
@@ -300,20 +319,14 @@ async function buildWidget() {
 
     try {
         const data = await fetchAll();
-        const html = buildHTML(data, today);
-
-        const wv = new WebView();
-        await wv.loadHTML(html);
-        // Give the HTML a moment to fully render before snapshotting
-        await wv.evaluateJavaScript('document.readyState');
-        const img = await wv.getSnapshot();
-        w.backgroundImage = img;
+        w.backgroundImage = drawCalendar(data, today);
     } catch (e) {
-        // Fallback: plain error text
+        // Show the actual error so we can debug if needed
         w.backgroundColor = Color.white();
-        const t = w.addText('⚠ Could not load calendar');
-        t.font = Font.systemFont(11);
+        const t = w.addText('⚠ ' + (e.message || String(e)));
+        t.font = Font.systemFont(10);
         t.textColor = new Color('#dc2626');
+        t.minimumScaleFactor = 0.5;
     }
 
     return w;
