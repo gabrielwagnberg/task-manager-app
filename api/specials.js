@@ -49,18 +49,17 @@ module.exports = async (req, res) => {
       const bdayRows = await bdaySheet.getRows();
       const specRows = await specSheet.getRows();
 
-      // Visibility rule: shared items are visible to everyone; private items
-      // (Shared = FALSE) are visible only to their owner. Items with no owner
-      // are legacy rows created before owner tracking — only show them if they
-      // are explicitly shared (Shared = TRUE).
-      const isVisible = (r, idCol) => {
+      // Visibility rule: shared items visible to everyone; private items only
+      // to their owner. Legacy rows with no Owner field are treated as visible
+      // to everyone until ownership is claimed (see PUT handler below).
+      const isVisible = r => {
         const shared = r.get('Shared') === 'TRUE' || r.get('Shared') === true;
         const owner  = r.get('Owner') || '';
-        return shared || owner === user;
+        return shared || !owner || owner === user;
       };
 
       const birthdays = bdayRows
-        .filter(r => isVisible(r))
+        .filter(isVisible)
         .map(r => ({
           id:     r.get('Birthday ID'),
           name:   r.get('Name') || '',
@@ -71,7 +70,7 @@ module.exports = async (req, res) => {
         }));
 
       const specialDays = specRows
-        .filter(r => isVisible(r))
+        .filter(isVisible)
         .map(r => ({
           id:        r.get('Day ID'),
           name:      r.get('Name') || '',
@@ -140,22 +139,24 @@ module.exports = async (req, res) => {
       const { resource, id } = req.body;
 
       if (resource === 'birthday') {
-        const { name, date, shared, notes } = req.body;
+        const { name, date, shared, notes, owner: newOwner } = req.body;
         const bdaySheet = await getOrCreateSheet(doc, 'Birthdays', BIRTHDAY_HEADERS);
         await ensureHeaders(bdaySheet, BIRTHDAY_HEADERS);
         const rows = await bdaySheet.getRows();
         const row  = rows.find(r => r.get('Birthday ID') == id);
         if (!row) return res.status(404).json({ error: 'Birthday not found' });
-        if (name  !== undefined) row.set('Name',   name);
-        if (date  !== undefined) row.set('Date',   date);
-        if (notes !== undefined) row.set('Notes',  notes || '');
-        if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        if (name      !== undefined) row.set('Name',   name);
+        if (date      !== undefined) row.set('Date',   date);
+        if (notes     !== undefined) row.set('Notes',  notes || '');
+        if (shared    !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        // Claim ownership if the row has no owner yet (one-time migration for legacy rows).
+        if (newOwner && !row.get('Owner')) row.set('Owner', newOwner);
         await row.save();
         return res.status(200).json({ id });
       }
 
       if (resource === 'special-day') {
-        const { name, date, recurring, shared, notes } = req.body;
+        const { name, date, recurring, shared, notes, owner: newOwner } = req.body;
         const specSheet = await getOrCreateSheet(doc, 'Special Days', SPECIAL_DAY_HEADERS);
         await ensureHeaders(specSheet, SPECIAL_DAY_HEADERS);
         const rows = await specSheet.getRows();
@@ -166,6 +167,8 @@ module.exports = async (req, res) => {
         if (recurring !== undefined) row.set('Recurring', recurring ? 'TRUE' : 'FALSE');
         if (shared    !== undefined) row.set('Shared',    shared ? 'TRUE' : 'FALSE');
         if (notes     !== undefined) row.set('Notes',     notes || '');
+        // Claim ownership if the row has no owner yet (one-time migration for legacy rows).
+        if (newOwner && !row.get('Owner')) row.set('Owner', newOwner);
         await row.save();
         return res.status(200).json({ id });
       }

@@ -3464,9 +3464,10 @@
             try {
                 const res = await fetch(`/api/specials?user=${encodeURIComponent(currentUser)}`);
                 const data = await res.json();
-                // Server already filters by visibility — this is a client-side safety net.
-                // Shared items are visible to everyone; private items only to their owner.
-                const canSee = item => item.shared || item.owner === currentUser;
+                // Shared items visible to everyone; private items only to their owner.
+                // Ownerless items (legacy, pre-owner-tracking) remain visible to everyone
+                // until ownership is claimed by editing and re-saving the item.
+                const canSee = item => item.shared || !item.owner || item.owner === currentUser;
                 birthdays   = (data.birthdays   || []).filter(canSee);
                 specialDays = (data.specialDays || []).filter(canSee);
                 specialsLoaded = true;
@@ -4100,7 +4101,7 @@
             try {
                 const res = await fetch('/api/specials', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resource: 'birthday', id, name, date, shared, notes }),
+                    body: JSON.stringify({ resource: 'birthday', id, name, date, shared, notes, owner: currentUser }),
                 });
                 if (res.ok) { closeModal(); await loadSpecials(); }
                 else alert('Failed to save');
@@ -4160,7 +4161,7 @@
             try {
                 const res = await fetch('/api/specials', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ resource: 'special-day', id, name, date, recurring, shared, notes }),
+                    body: JSON.stringify({ resource: 'special-day', id, name, date, recurring, shared, notes, owner: currentUser }),
                 });
                 if (res.ok) { closeModal(); await loadSpecials(); }
                 else alert('Failed to save');
