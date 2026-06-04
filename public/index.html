@@ -2079,7 +2079,7 @@
         }
 
         async function openLeaderboard() {
-            if (!pointsLoaded) await loadPoints();
+            await loadPoints(); // always fetch fresh
 
             // Date helpers
             const today = todayStr();
@@ -2123,11 +2123,8 @@
                 </table>
             `;
 
-            // Show leaderboard panel, hide all others
             document.getElementById('modal-title').textContent = 'Leaderboard';
-            ['modal-detail','modal-edit','modal-add','modal-day','modal-schedule'].forEach(id => {
-                document.getElementById(id).hidden = true;
-            });
+            hideAllPanels();
             document.getElementById('modal-leaderboard').hidden = false;
             document.getElementById('modal-overlay').classList.add('open');
             if (window.lucide) lucide.createIcons();
@@ -2316,10 +2313,8 @@
             document.getElementById('modal-title').textContent = addModalTitles[section];
             document.getElementById('modal-add-submit-btn').textContent = addModalBtnText[section];
             renderAddForm(section);
-            document.getElementById('modal-detail').hidden = true;
-            document.getElementById('modal-edit').hidden   = true;
-            document.getElementById('modal-day').hidden    = true;
-            document.getElementById('modal-add').hidden    = false;
+            hideAllPanels();
+            document.getElementById('modal-add').hidden = false;
             document.getElementById('modal-overlay').classList.add('open');
         }
 
@@ -2634,10 +2629,8 @@
 
         function openDayView(dateStr) {
             currentDayDate = dateStr;
-            document.getElementById('modal-detail').hidden = true;
-            document.getElementById('modal-edit').hidden   = true;
-            document.getElementById('modal-add').hidden    = true;
-            document.getElementById('modal-day').hidden    = false;
+            hideAllPanels();
+            document.getElementById('modal-day').hidden = false;
             renderDayView(dateStr);
             document.getElementById('modal-overlay').classList.add('open');
         }
@@ -2780,11 +2773,14 @@
             document.getElementById('modal-overlay').classList.add('open');
         }
 
+        function hideAllPanels() {
+            ['modal-detail','modal-edit','modal-add','modal-day','modal-schedule','modal-leaderboard']
+                .forEach(id => { document.getElementById(id).hidden = true; });
+        }
+
         function closeModal() {
             document.getElementById('modal-overlay').classList.remove('open');
-            document.getElementById('modal-add').hidden      = true;
-            document.getElementById('modal-day').hidden      = true;
-            document.getElementById('modal-schedule').hidden = true;
+            hideAllPanels();
             modalItem       = null;
             modalSchedule   = null;
             addModalSection = null;
@@ -2866,9 +2862,8 @@
                 </div>
             `).join('');
 
-            document.getElementById('modal-day').hidden    = true;
+            hideAllPanels();
             document.getElementById('modal-detail').hidden = false;
-            document.getElementById('modal-edit').hidden   = true;
             renderIcons();
         }
 
@@ -3748,10 +3743,7 @@
             ).join('');
             document.getElementById('modal-sched-instance-actions').hidden = !showInstanceActions;
             document.getElementById('modal-title').textContent = 'Schedule';
-            document.getElementById('modal-detail').hidden   = true;
-            document.getElementById('modal-edit').hidden     = true;
-            document.getElementById('modal-add').hidden      = true;
-            document.getElementById('modal-day').hidden      = true;
+            hideAllPanels();
             document.getElementById('modal-schedule').hidden = false;
             document.getElementById('modal-overlay').classList.add('open');
             renderIcons();
