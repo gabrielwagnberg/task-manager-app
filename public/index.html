@@ -2513,7 +2513,7 @@
                             onkeypress="if(event.key==='Enter') submitAddForm()">
                     </div>
                     <div class="modal-field">
-                        <div class="modal-field-label">Birthday (month + day — year doesn't matter)</div>
+                        <div class="modal-field-label">Birthday</div>
                         <input type="date" id="bday-date">
                     </div>
                     <div class="modal-field">
@@ -3478,11 +3478,12 @@
         }
 
         // Returns all birthdays that fall on the given dateStr (YYYY-MM-DD).
-        // Compares only MM-DD portion since birthdays recur every year.
+        // Compares only the MM-DD tail so birthdays recur every year regardless
+        // of whether the stored date is legacy MM-DD or full YYYY-MM-DD.
         function getBirthdaysForDate(dateStr) {
             const parts = dateStr.split('-');
             const md = `${parts[1]}-${parts[2]}`;
-            return birthdays.filter(b => b.date === md);
+            return birthdays.filter(b => b.date.slice(-5) === md);
         }
 
         // Returns all special days that fall on the given dateStr (YYYY-MM-DD).
@@ -3551,6 +3552,18 @@
             return `${monthNames[parseInt(parts[0]) - 1]} ${parseInt(parts[1])}`;
         }
 
+        // Format a birthday date for display in the Events list.
+        // Full YYYY-MM-DD → "Jun 15, 1990"; legacy MM-DD → "Jun 15".
+        function formatBirthdayDate(d) {
+            const parts = d.split('-');
+            const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            if (parts.length === 3) {
+                return `${monthNames[parseInt(parts[1]) - 1]} ${parseInt(parts[2])}, ${parts[0]}`;
+            }
+            // Legacy MM-DD
+            return formatMonthDay(d);
+        }
+
         function toggleEventsSection(key) {
             eventsCollapsed[key] = !eventsCollapsed[key];
             renderSchedulesList();
@@ -3602,7 +3615,7 @@
             const bdayItemsHtml = birthdays.length === 0
                 ? '<div class="empty-state" style="margin-bottom:12px">No birthdays yet.</div>'
                 : birthdays.map(b => {
-                    const dateLabel  = b.date ? formatMonthDay(b.date) : '—';
+                    const dateLabel  = b.date ? formatBirthdayDate(b.date) : '—';
                     const privacyTag = !b.shared ? ' ' + ic('lock') : '';
                     return `<div class="item">
                         <div class="item-content">
@@ -4005,9 +4018,7 @@
             const shared  = !(document.getElementById('bday-private')?.checked);
             if (!name)    { alert('Name is required'); return; }
             if (!dateVal) { alert('Date is required'); return; }
-            // Store only MM-DD (year-agnostic)
-            const parts = dateVal.split('-');
-            const date  = `${parts[1]}-${parts[2]}`;
+            const date = dateVal; // Store full YYYY-MM-DD (year matters for birthdays)
             try {
                 const res = await fetch('/api/specials', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -4077,13 +4088,13 @@
             openAddModal('birthdays');
             document.getElementById('modal-title').textContent = 'Edit Birthday';
             document.getElementById('modal-add-submit-btn').textContent = 'Save';
-            // Pre-fill: date input needs YYYY-MM-DD; store as MM-DD so use placeholder year 2000
+            // Pre-fill: new dates are YYYY-MM-DD; legacy are MM-DD (use 2000 as placeholder)
             const nameEl    = document.getElementById('bday-name');
             const dateEl    = document.getElementById('bday-date');
             const notesEl   = document.getElementById('bday-notes');
             const privateEl = document.getElementById('bday-private');
             if (nameEl)    nameEl.value      = b.name;
-            if (dateEl)    dateEl.value      = `2000-${b.date}`;
+            if (dateEl)    dateEl.value      = b.date.length === 5 ? `2000-${b.date}` : b.date;
             if (notesEl)   notesEl.value     = b.notes || '';
             if (privateEl) privateEl.checked = !b.shared;
         }
@@ -4095,9 +4106,8 @@
             const shared  = !(document.getElementById('bday-private')?.checked);
             if (!name)    { alert('Name is required'); return; }
             if (!dateVal) { alert('Date is required'); return; }
-            const parts = dateVal.split('-');
-            const date  = `${parts[1]}-${parts[2]}`;
-            const id    = editingSpecial.id;
+            const date = dateVal; // Store full YYYY-MM-DD (year matters for birthdays)
+            const id   = editingSpecial.id;
             try {
                 const res = await fetch('/api/specials', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
