@@ -1,27 +1,10 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
 
-const BIRTHDAY_HEADERS    = ['Birthday ID', 'Name', 'Date', 'Owner', 'Shared', 'Notes'];
+// Date column stays as MM-DD forever (Google Sheets formats it that way — don't fight it).
+// Birth year lives in a separate plain-integer column so Sheets can't reformat it.
+const BIRTHDAY_HEADERS    = ['Birthday ID', 'Name', 'Date', 'Birth Year', 'Owner', 'Shared', 'Notes'];
 const SPECIAL_DAY_HEADERS = ['Day ID', 'Name', 'Date', 'Recurring', 'Owner', 'Shared', 'Notes'];
-
-// Normalize a date string from Google Sheets back to a stable format.
-// Sheets may auto-convert YYYY-MM-DD to a date serial and return it in the
-// spreadsheet's locale format (e.g. "6/15/1990" for US locale). This keeps
-// legacy MM-DD annual dates intact and converts full dates to YYYY-MM-DD.
-const normalizeBirthdayDate = (d) => {
-  if (!d) return '';
-  // Legacy annual format: MM-DD (e.g. "06-15") — leave unchanged
-  if (/^\d{2}-\d{2}$/.test(d)) return d;
-  // ISO date: YYYY-MM-DD — already correct
-  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-  // US locale: M/D/YYYY or MM/DD/YYYY (e.g. "6/15/1990")
-  const us = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
-  // European: D.M.YYYY (e.g. "15.6.1990")
-  const eu = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (eu) return `${eu[3]}-${eu[2].padStart(2, '0')}-${eu[1].padStart(2, '0')}`;
-  return d; // Unknown — pass through
-};
 
 const ensureHeaders = async (sheet, required) => {
   await sheet.loadHeaderRow();
@@ -80,12 +63,13 @@ module.exports = async (req, res) => {
       const birthdays = bdayRows
         .filter(isVisible)
         .map(r => ({
-          id:     r.get('Birthday ID'),
-          name:   r.get('Name') || '',
-          date:   normalizeBirthdayDate(r.get('Date') || ''),
-          owner:  r.get('Owner') || '',
-          shared: r.get('Shared') === 'TRUE' || r.get('Shared') === true,
-          notes:  r.get('Notes') || '',
+          id:        r.get('Birthday ID'),
+          name:      r.get('Name') || '',
+          date:      r.get('Date') || '',        // always MM-DD
+          birthYear: r.get('Birth Year') || '',  // plain integer string, e.g. '1990'
+          owner:     r.get('Owner') || '',
+          shared:    r.get('Shared') === 'TRUE' || r.get('Shared') === true,
+          notes:     r.get('Notes') || '',
         }));
 
       const specialDays = specRows
@@ -108,7 +92,7 @@ module.exports = async (req, res) => {
       const { resource } = req.body;
 
       if (resource === 'birthday') {
-        const { name, date, owner, shared, notes } = req.body;
+        const { name, date, birthYear, owner, shared, notes } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
         if (!date) return res.status(400).json({ error: 'Date is required' });
 
@@ -119,13 +103,14 @@ module.exports = async (req, res) => {
 
         await bdaySheet.addRow({
           'Birthday ID': newId,
-          Name:   name,
-          Date:   date,
-          Owner:  owner || '',
-          Shared: shared ? 'TRUE' : 'FALSE',
-          Notes:  notes || '',
-        }, { raw: true }); // raw:true keeps the date string as-is; prevents Sheets auto-converting YYYY-MM-DD to a date serial
-        return res.status(201).json({ id: newId, name, date, owner: owner || '', shared: !!shared, notes: notes || '' });
+          Name:          name,
+          Date:          date,               // MM-DD
+          'Birth Year':  birthYear || '',    // plain year integer, e.g. 1990
+          Owner:         owner || '',
+          Shared:        shared ? 'TRUE' : 'FALSE',
+          Notes:         notes || '',
+        });
+        return res.status(201).json({ id: newId, name, date, birthYear: birthYear || '', owner: owner || '', shared: !!shared, notes: notes || '' });
       }
 
       if (resource === 'special-day') {
@@ -158,16 +143,17 @@ module.exports = async (req, res) => {
       const { resource, id } = req.body;
 
       if (resource === 'birthday') {
-        const { name, date, shared, notes, owner: newOwner } = req.body;
+        const { name, date, birthYear, shared, notes, owner: newOwner } = req.body;
         const bdaySheet = await getOrCreateSheet(doc, 'Birthdays', BIRTHDAY_HEADERS);
         await ensureHeaders(bdaySheet, BIRTHDAY_HEADERS);
         const rows = await bdaySheet.getRows();
         const row  = rows.find(r => r.get('Birthday ID') == id);
         if (!row) return res.status(404).json({ error: 'Birthday not found' });
-        if (name      !== undefined) row.set('Name',   name);
-        if (date      !== undefined) row.set('Date',   date);
-        if (notes     !== undefined) row.set('Notes',  notes || '');
-        if (shared    !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
+        if (name      !== undefined) row.set('Name',       name);
+        if (date      !== undefined) row.set('Date',       date);        // MM-DD
+        if (birthYear !== undefined) row.set('Birth Year', birthYear ? String(birthYear) : '');
+        if (notes     !== undefined) row.set('Notes',      notes || '');
+        if (shared    !== undefined) row.set('Shared',     shared ? 'TRUE' : 'FALSE');
         // Claim ownership if the row has no owner yet (one-time migration for legacy rows).
         if (newOwner && !row.get('Owner')) row.set('Owner', newOwner);
         await row.save();
