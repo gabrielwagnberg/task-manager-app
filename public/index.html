@@ -1347,6 +1347,7 @@
     <div id="whiteboard-overlay" hidden>
         <div class="whiteboard-header">
             <span class="whiteboard-title"><i data-lucide="square-pen" class="icon"></i> Whiteboard</span>
+            <span id="wb-status" style="font-size:12px;color:#aaa;margin-left:auto;margin-right:14px"></span>
             <button class="whiteboard-close" onclick="closeWhiteboard()" title="Close"><i data-lucide="x" class="icon"></i></button>
         </div>
         <textarea id="whiteboard-textarea" placeholder="Write anything…"></textarea>
@@ -4284,30 +4285,73 @@
         // ── Whiteboard ───────────────────────────────────────────────────────────
         const WB_KEY = 'whiteboard';
         let wbSaveTimer = null;
+        let wbDirty    = false;
 
-        function openWhiteboard() {
+        function wbSetStatus(text, color) {
+            const el = document.getElementById('wb-status');
+            if (el) { el.textContent = text; el.style.color = color || '#aaa'; }
+        }
+
+        async function openWhiteboard() {
             const overlay = document.getElementById('whiteboard-overlay');
-            const ta = document.getElementById('whiteboard-textarea');
+            const ta      = document.getElementById('whiteboard-textarea');
+            // Show cached content instantly while we fetch
             ta.value = localStorage.getItem(WB_KEY) || '';
+            wbDirty  = false;
             overlay.hidden = false;
             renderIcons();
             ta.focus();
-            // Place cursor at end
             ta.setSelectionRange(ta.value.length, ta.value.length);
+            // Fetch latest from server
+            wbSetStatus('Syncing…', '#aaa');
+            try {
+                const res  = await fetch('/api/whiteboard');
+                const data = await res.json();
+                if (!wbDirty) {          // don't overwrite if user already started typing
+                    ta.value = data.content || '';
+                    localStorage.setItem(WB_KEY, ta.value);
+                    ta.setSelectionRange(ta.value.length, ta.value.length);
+                }
+                wbSetStatus('', '');
+            } catch (e) {
+                wbSetStatus('Offline', '#dc2626');
+            }
+        }
+
+        async function wbSaveToServer() {
+            const content = document.getElementById('whiteboard-textarea').value;
+            localStorage.setItem(WB_KEY, content);
+            wbSetStatus('Saving…', '#aaa');
+            try {
+                const res = await fetch('/api/whiteboard', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ content, editor: currentUser }),
+                });
+                if (res.ok) {
+                    wbDirty = false;
+                    wbSetStatus('Saved', '#22c55e');
+                    setTimeout(() => wbSetStatus('', ''), 2000);
+                } else {
+                    wbSetStatus('Error saving', '#dc2626');
+                }
+            } catch (e) {
+                wbSetStatus('Offline', '#dc2626');
+            }
         }
 
         function closeWhiteboard() {
-            // Flush any pending save immediately
             clearTimeout(wbSaveTimer);
-            localStorage.setItem(WB_KEY, document.getElementById('whiteboard-textarea').value);
+            if (wbDirty) wbSaveToServer();
             document.getElementById('whiteboard-overlay').hidden = true;
+            wbDirty = false;
         }
 
         document.getElementById('whiteboard-textarea').addEventListener('input', () => {
+            wbDirty = true;
+            localStorage.setItem(WB_KEY, document.getElementById('whiteboard-textarea').value);
             clearTimeout(wbSaveTimer);
-            wbSaveTimer = setTimeout(() => {
-                localStorage.setItem(WB_KEY, document.getElementById('whiteboard-textarea').value);
-            }, 400);
+            wbSaveTimer = setTimeout(wbSaveToServer, 2000);
         });
 
         // Tab navigation
