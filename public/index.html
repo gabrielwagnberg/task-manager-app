@@ -3637,9 +3637,10 @@
 
             // ── Special Days / Holidays ──
             const specAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('special-days')" style="margin-bottom:8px">${ic('plus')} Add Holiday / Red Day</button>`;
+            const sortedSpecialDays = [...specialDays].sort((a, b) => a.date.slice(-5).localeCompare(b.date.slice(-5)));
             const specItemsHtml = specialDays.length === 0
                 ? '<div class="empty-state" style="margin-bottom:12px">No special days yet.</div>'
-                : specialDays.map(s => {
+                : sortedSpecialDays.map(s => {
                     const isRecurring = s.recurring === true || s.recurring === 'true';
                     const dateLabel   = isRecurring ? formatMonthDay(s.date) : s.date;
                     const privacyTag  = !s.shared ? ' ' + ic('lock') : '';
