@@ -1301,7 +1301,7 @@
         let specialDays    = [];   // from /api/specials
         let specialsLoaded = false;
         // Collapse state for Events tab sections (survives re-renders within a session)
-        const eventsCollapsed = { schedules: false, birthdays: false, holidays: false };
+        const eventsCollapsed = { schedules: true, birthdays: true, holidays: true };
         let tasksLoaded = false;
         let shoppingLoaded = false;
         let notesLoaded = false;
