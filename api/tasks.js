@@ -47,16 +47,21 @@ const rowIsRecurring = (row) => {
 const REQUIRED_HEADERS = [
   'Task ID', 'Task Name', 'Completed', 'Due Date', 'Owner', 'Shared',
   'Frequency', 'Rate', 'Last Done', 'Next Due', 'Project', 'Priority', 'Assigned To',
-  'Start Time', 'End Time', 'Counts As Point',
+  'Start Time', 'End Time', 'Counts As Point', 'Point Value',
 ];
 
 // Get the Points sheet, creating it if it doesn't exist yet.
+// Also migrates existing sheets to add the Point Value column.
 const getOrCreatePointsSheet = async (doc) => {
   const title = 'Points';
-  const headers = ['Point ID', 'User', 'Date', 'Task ID', 'Task Name'];
+  const headers = ['Point ID', 'User', 'Date', 'Task ID', 'Task Name', 'Point Value'];
   if (doc.sheetsByTitle[title]) {
     const sheet = doc.sheetsByTitle[title];
     await sheet.loadHeaderRow();
+    const existing = sheet.headerValues || [];
+    if (!existing.includes('Point Value')) {
+      await sheet.setHeaderRow([...existing, 'Point Value']);
+    }
     return sheet;
   }
   return doc.addSheet({ title, headerValues: headers });
@@ -134,13 +139,14 @@ module.exports = async (req, res) => {
         startTime: row.get('Start Time') || '',
         endTime: row.get('End Time') || '',
         countsAsPoint: row.get('Counts As Point') === 'TRUE' || row.get('Counts As Point') === true,
+        pointValue: parseInt(row.get('Point Value')) || 1,
       }));
 
       return res.status(200).json(tasks);
     }
 
     if (method === 'POST') {
-      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint } = req.body;
+      const { name, dueDate, owner, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint, pointValue } = req.body;
 
       if (!name) {
         return res.status(400).json({ error: 'Task name is required' });
@@ -179,6 +185,7 @@ module.exports = async (req, res) => {
         'Start Time': startTime || '',
         'End Time': endTime || '',
         'Counts As Point': countsAsPoint ? 'TRUE' : 'FALSE',
+        'Point Value': parseInt(pointValue) || 1,
       });
 
       return res.status(201).json({
@@ -199,6 +206,7 @@ module.exports = async (req, res) => {
         startTime: startTime || '',
         endTime: endTime || '',
         countsAsPoint: !!countsAsPoint,
+        pointValue: parseInt(pointValue) || 1,
       });
     }
 
@@ -219,7 +227,7 @@ module.exports = async (req, res) => {
 
       // ── Full edit (name present in body) ──────────────────────────────────
       if (typeof body.name !== 'undefined') {
-        const { name, dueDate, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint } = body;
+        const { name, dueDate, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue: nextDueOverride, startTime, endTime, countsAsPoint, pointValue } = body;
 
         if (name !== undefined) row.set('Task Name', name);
         if (shared !== undefined) row.set('Shared', shared ? 'TRUE' : 'FALSE');
@@ -229,6 +237,7 @@ module.exports = async (req, res) => {
         if (startTime !== undefined) row.set('Start Time', startTime || '');
         if (endTime !== undefined) row.set('End Time', endTime || '');
         if (countsAsPoint !== undefined) row.set('Counts As Point', countsAsPoint ? 'TRUE' : 'FALSE');
+        if (pointValue !== undefined) row.set('Point Value', parseInt(pointValue) || 1);
 
         const isRecurring = !!recurring && !!frequency;
         if (isRecurring) {
@@ -272,12 +281,14 @@ module.exports = async (req, res) => {
           startTime: row.get('Start Time') || '',
           endTime: row.get('End Time') || '',
           countsAsPoint: row.get('Counts As Point') === 'TRUE',
+          pointValue: parseInt(row.get('Point Value')) || 1,
         });
       }
 
       // ── Toggle completed ──────────────────────────────────────────────────
       const { completed, completedBy } = body;
       const countsAsPoint = row.get('Counts As Point') === 'TRUE';
+      const taskPointValue = parseInt(row.get('Point Value')) || 1;
 
       if (rowIsRecurring(row) && completed) {
         // Use the client's local date if provided; fall back to server UTC date.
@@ -304,6 +315,7 @@ module.exports = async (req, res) => {
             'Date': today,
             'Task ID': String(id),
             'Task Name': row.get('Task Name'),
+            'Point Value': taskPointValue,
           });
         }
 
@@ -327,6 +339,7 @@ module.exports = async (req, res) => {
           'Date': today,
           'Task ID': String(id),
           'Task Name': row.get('Task Name'),
+          'Point Value': taskPointValue,
         });
       }
 

@@ -1716,6 +1716,7 @@
             const nextDue = recurring ? dueInput.value : '';
             const countsAsPointInput = document.getElementById('task-counts-as-point');
             const countsAsPoint = countsAsPointInput ? countsAsPointInput.checked : false;
+            const pointValue = countsAsPoint ? (parseInt(document.getElementById('task-point-value')?.value) || 1) : 1;
 
             if (!name) {
                 showError('tasks', 'Please enter a task name');
@@ -1726,7 +1727,7 @@
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue, startTime, endTime, countsAsPoint }),
+                    body: JSON.stringify({ name, dueDate, owner: currentUser, shared, recurring, frequency, rate, project, priority, assignedTo, nextDue, startTime, endTime, countsAsPoint, pointValue }),
                 });
 
                 if (response.ok) {
@@ -2167,11 +2168,9 @@
             // First day of current month
             const monthStartStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 
-            const count = (user, from, to) => points.filter(p =>
-                p.user === user &&
-                (!from || p.date >= from) &&
-                (!to   || p.date <= to)
-            ).length;
+            const score = (user, from, to) => points
+                .filter(p => p.user === user && (!from || p.date >= from) && (!to || p.date <= to))
+                .reduce((sum, p) => sum + (p.pointValue || 1), 0);
 
             const users = ['Gabriel', 'Thomas'];
             const periods = [
@@ -2183,11 +2182,11 @@
 
             const headerCells = users.map(u => `<th>${u}</th>`).join('');
             const bodyRows = periods.map(({ label, from, to }) => {
-                const counts = users.map(u => count(u, from, to));
-                const max = Math.max(...counts);
-                const cells = counts.map((c, i) => {
-                    const winner = c === max && c > 0;
-                    return `<td class="${winner ? 'leaderboard-winner' : ''}">${c}</td>`;
+                const scores = users.map(u => score(u, from, to));
+                const max = Math.max(...scores);
+                const cells = scores.map(s => {
+                    const winner = s === max && s > 0;
+                    return `<td class="${winner ? 'leaderboard-winner' : ''}">${s}</td>`;
                 }).join('');
                 return `<tr><td>${label}</td>${cells}</tr>`;
             }).join('');
@@ -2469,9 +2468,16 @@
                     </div>
                     <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="task-counts-as-point">
+                            <input type="checkbox" id="task-counts-as-point"
+                                onchange="document.getElementById('task-point-value-wrap').hidden = !this.checked">
                             <span class="modal-field-label" style="margin:0">Counts as point ${ic('trophy')}</span>
                         </label>
+                        <div id="task-point-value-wrap" hidden style="margin-top:8px;display:flex;align-items:center;gap:8px;padding-left:26px">
+                            <span style="font-size:13px;color:#777">Value:</span>
+                            <input type="number" id="task-point-value" min="1" value="1"
+                                style="width:64px;padding:7px 8px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit">
+                            <span style="font-size:13px;color:#999">points</span>
+                        </div>
                     </div>
                 `;
             } else if (section === 'shopping') {
@@ -2904,7 +2910,10 @@
                     rows.push(['Time', timeStr]);
                 }
                 rows.push(['Project', projectName(data.project) || '—']);
-                if (data.countsAsPoint) rows.push(['Score', ic('trophy') + ' Counts as point']);
+                if (data.countsAsPoint) {
+                    const pv = data.pointValue || 1;
+                    rows.push(['Score', ic('trophy') + ` ${pv} ${pv === 1 ? 'point' : 'points'}`]);
+                }
                 rows.push(['Visibility', data.shared ? 'Shared' : ic('lock') + ' Private']);
                 rows.push(['Owner', data.owner]);
             } else if (type === 'shopping') {
@@ -3026,9 +3035,16 @@
                     </div>
                     <div class="modal-field">
                         <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                            <input type="checkbox" id="edit-counts-as-point" ${data.countsAsPoint ? 'checked' : ''}>
+                            <input type="checkbox" id="edit-counts-as-point" ${data.countsAsPoint ? 'checked' : ''}
+                                onchange="document.getElementById('edit-point-value-wrap').hidden = !this.checked">
                             <span class="modal-field-label" style="margin:0">Counts as point ${ic('trophy')}</span>
                         </label>
+                        <div id="edit-point-value-wrap" ${data.countsAsPoint ? '' : 'hidden'} style="margin-top:8px;display:flex;align-items:center;gap:8px;padding-left:26px">
+                            <span style="font-size:13px;color:#777">Value:</span>
+                            <input type="number" id="edit-point-value" min="1" value="${data.pointValue || 1}"
+                                style="width:64px;padding:7px 8px;border:1px solid #e0e0e0;border-radius:8px;font-size:14px;font-family:inherit">
+                            <span style="font-size:13px;color:#999">points</span>
+                        </div>
                     </div>
                 `;
             } else if (type === 'shopping') {
@@ -3155,6 +3171,7 @@
                     startTime: document.getElementById('edit-start-time')?.value || '',
                     endTime:   document.getElementById('edit-end-time')?.value   || '',
                     countsAsPoint: document.getElementById('edit-counts-as-point')?.checked || false,
+                    pointValue: parseInt(document.getElementById('edit-point-value')?.value) || 1,
                 };
                 url = '/api/tasks';
                 successReload = loadTasks;
