@@ -4,6 +4,25 @@ const { JWT } = require('google-auth-library');
 const BIRTHDAY_HEADERS    = ['Birthday ID', 'Name', 'Date', 'Owner', 'Shared', 'Notes'];
 const SPECIAL_DAY_HEADERS = ['Day ID', 'Name', 'Date', 'Recurring', 'Owner', 'Shared', 'Notes'];
 
+// Normalize a date string from Google Sheets back to a stable format.
+// Sheets may auto-convert YYYY-MM-DD to a date serial and return it in the
+// spreadsheet's locale format (e.g. "6/15/1990" for US locale). This keeps
+// legacy MM-DD annual dates intact and converts full dates to YYYY-MM-DD.
+const normalizeBirthdayDate = (d) => {
+  if (!d) return '';
+  // Legacy annual format: MM-DD (e.g. "06-15") — leave unchanged
+  if (/^\d{2}-\d{2}$/.test(d)) return d;
+  // ISO date: YYYY-MM-DD — already correct
+  if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  // US locale: M/D/YYYY or MM/DD/YYYY (e.g. "6/15/1990")
+  const us = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+  // European: D.M.YYYY (e.g. "15.6.1990")
+  const eu = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (eu) return `${eu[3]}-${eu[2].padStart(2, '0')}-${eu[1].padStart(2, '0')}`;
+  return d; // Unknown — pass through
+};
+
 const ensureHeaders = async (sheet, required) => {
   await sheet.loadHeaderRow();
   const existing = sheet.headerValues || [];
@@ -63,7 +82,7 @@ module.exports = async (req, res) => {
         .map(r => ({
           id:     r.get('Birthday ID'),
           name:   r.get('Name') || '',
-          date:   r.get('Date') || '',
+          date:   normalizeBirthdayDate(r.get('Date') || ''),
           owner:  r.get('Owner') || '',
           shared: r.get('Shared') === 'TRUE' || r.get('Shared') === true,
           notes:  r.get('Notes') || '',
@@ -105,7 +124,7 @@ module.exports = async (req, res) => {
           Owner:  owner || '',
           Shared: shared ? 'TRUE' : 'FALSE',
           Notes:  notes || '',
-        });
+        }, { raw: true }); // raw:true keeps the date string as-is; prevents Sheets auto-converting YYYY-MM-DD to a date serial
         return res.status(201).json({ id: newId, name, date, owner: owner || '', shared: !!shared, notes: notes || '' });
       }
 
