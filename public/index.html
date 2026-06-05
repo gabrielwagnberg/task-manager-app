@@ -3585,10 +3585,10 @@
             // Helper: clickable section header with collapse chevron
             const sectionLabel = (key, text, count) => {
                 const collapsed = eventsCollapsed[key];
-                const countBadge = count > 0 ? ` <span style="font-weight:400;font-size:10px;background:#e0e0e0;border-radius:10px;padding:0 6px;margin-left:4px">${count}</span>` : '';
+                const countBadge = count > 0 ? ` <span style="font-weight:400;font-size:11px;background:#e0e0e0;border-radius:10px;padding:0 7px;margin-left:6px">${count}</span>` : '';
                 return `<div onclick="toggleEventsSection('${key}')"
-                    style="font-size:11px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.06em;
-                           margin:16px 0 6px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+                    style="font-size:13px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.06em;
+                           margin:16px 0 2px;padding:10px 0;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
                     <span>${text}${countBadge}</span>
                     ${ic(collapsed ? 'chevron-right' : 'chevron-down')}
                 </div>`;
@@ -3611,7 +3611,6 @@
                     return `<div class="item">
                         <div class="item-content">
                             <button class="item-name-btn" onclick="openScheduleSeriesModal(${s.id})">${escapeHtml(s.name)}${privacyTag}</button>
-                            <div class="item-meta">${timeStr} · ${recurStr}${s.assignedTo ? ' · ' + s.assignedTo : ''}</div>
                         </div>
                     </div>`;
                 }).join('');
@@ -3642,7 +3641,7 @@
                 ? '<div class="empty-state" style="margin-bottom:12px">No special days yet.</div>'
                 : specialDays.map(s => {
                     const isRecurring = s.recurring === true || s.recurring === 'true';
-                    const dateLabel   = isRecurring ? formatMonthDay(s.date) + ' (annual)' : s.date;
+                    const dateLabel   = isRecurring ? formatMonthDay(s.date) : s.date;
                     const privacyTag  = !s.shared ? ' ' + ic('lock') : '';
                     return `<div class="item">
                         <div class="item-content">
