@@ -724,6 +724,71 @@
 
         .trophy-btn:hover { color: #a07010; }
 
+        .whiteboard-btn {
+            color: #888;
+            cursor: pointer;
+            line-height: 1;
+            user-select: none;
+            transition: color 0.2s;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 10px;
+        }
+        .whiteboard-btn:hover { color: #333; }
+
+        #whiteboard-overlay {
+            position: fixed;
+            inset: 0;
+            background: #fff;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+        }
+        #whiteboard-overlay[hidden] { display: none; }
+
+        .whiteboard-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 16px 12px;
+            border-bottom: 1px solid #e5e7eb;
+            flex-shrink: 0;
+        }
+        .whiteboard-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .whiteboard-close {
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #888;
+            padding: 6px;
+            display: flex;
+            align-items: center;
+            border-radius: 8px;
+            transition: background 0.15s;
+        }
+        .whiteboard-close:hover { background: #f3f4f6; color: #333; }
+
+        #whiteboard-textarea {
+            flex: 1;
+            width: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            padding: 16px;
+            font-size: 16px;
+            line-height: 1.7;
+            color: #222;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
         .leaderboard-table {
             width: 100%;
             border-collapse: collapse;
@@ -1114,6 +1179,7 @@
             <div class="app-header">
                 <h1 class="app-title">Task Manager</h1>
                 <div style="display:flex;align-items:center">
+                    <span class="whiteboard-btn" onclick="openWhiteboard()" title="Whiteboard"><i data-lucide="square-pen" class="icon"></i></span>
                     <span class="trophy-btn" onclick="openLeaderboard()" title="Leaderboard"><i data-lucide="trophy" class="icon"></i></span>
                     <span class="refresh-btn" onclick="refreshAll()" title="Refresh"><i data-lucide="refresh-cw" class="icon"></i></span>
                 </div>
@@ -1275,6 +1341,15 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Whiteboard overlay (fullscreen, outside modal stack) -->
+    <div id="whiteboard-overlay" hidden>
+        <div class="whiteboard-header">
+            <span class="whiteboard-title"><i data-lucide="square-pen" class="icon"></i> Whiteboard</span>
+            <button class="whiteboard-close" onclick="closeWhiteboard()" title="Close"><i data-lucide="x" class="icon"></i></button>
+        </div>
+        <textarea id="whiteboard-textarea" placeholder="Write anything…"></textarea>
     </div>
 
     <script>
@@ -4205,6 +4280,35 @@
                 document.getElementById('modal-schedule').hidden = false;
             };
         }
+
+        // ── Whiteboard ───────────────────────────────────────────────────────────
+        const WB_KEY = 'whiteboard';
+        let wbSaveTimer = null;
+
+        function openWhiteboard() {
+            const overlay = document.getElementById('whiteboard-overlay');
+            const ta = document.getElementById('whiteboard-textarea');
+            ta.value = localStorage.getItem(WB_KEY) || '';
+            overlay.hidden = false;
+            renderIcons();
+            ta.focus();
+            // Place cursor at end
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+
+        function closeWhiteboard() {
+            // Flush any pending save immediately
+            clearTimeout(wbSaveTimer);
+            localStorage.setItem(WB_KEY, document.getElementById('whiteboard-textarea').value);
+            document.getElementById('whiteboard-overlay').hidden = true;
+        }
+
+        document.getElementById('whiteboard-textarea').addEventListener('input', () => {
+            clearTimeout(wbSaveTimer);
+            wbSaveTimer = setTimeout(() => {
+                localStorage.setItem(WB_KEY, document.getElementById('whiteboard-textarea').value);
+            }, 400);
+        });
 
         // Tab navigation
         document.querySelectorAll('.tab').forEach(btn => {
