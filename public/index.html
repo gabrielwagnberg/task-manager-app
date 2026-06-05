@@ -3559,6 +3559,17 @@
             return b.birthYear ? `${monthDay}, ${b.birthYear}` : monthDay;
         }
 
+        // Compute current age from birthYear + MM-DD date. Returns null if data missing.
+        function computeAge(b) {
+            if (!b.birthYear || !b.date) return null;
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const [mm, dd] = b.date.split('-').map(Number);
+            const birthdayThisYear = new Date(currentYear, mm - 1, dd);
+            const age = currentYear - parseInt(b.birthYear) - (today < birthdayThisYear ? 1 : 0);
+            return age >= 0 ? age : null;
+        }
+
         function toggleEventsSection(key) {
             eventsCollapsed[key] = !eventsCollapsed[key];
             renderSchedulesList();
@@ -3607,14 +3618,17 @@
 
             // ── Birthdays ──
             const bdayAddBtn = `<button class="add-toggle-btn" onclick="openAddModal('birthdays')" style="margin-bottom:8px">${ic('plus')} Add Birthday</button>`;
+            const sortedBirthdays = [...birthdays].sort((a, b) => a.name.localeCompare(b.name));
             const bdayItemsHtml = birthdays.length === 0
                 ? '<div class="empty-state" style="margin-bottom:12px">No birthdays yet.</div>'
-                : birthdays.map(b => {
+                : sortedBirthdays.map(b => {
+                    const age        = computeAge(b);
+                    const nameLabel  = age !== null ? `${escapeHtml(b.name)}, ${age} years` : escapeHtml(b.name);
                     const dateLabel  = b.date ? formatBirthdayDate(b) : '—';
                     const privacyTag = !b.shared ? ' ' + ic('lock') : '';
                     return `<div class="item">
                         <div class="item-content">
-                            <button class="item-name-btn" onclick="openEditBirthday(${b.id})">${escapeHtml(b.name)}${privacyTag}</button>
+                            <button class="item-name-btn" onclick="openEditBirthday(${b.id})">${nameLabel}${privacyTag}</button>
                             <div class="item-meta">${dateLabel}${b.notes ? ' · ' + escapeHtml(b.notes) : ''}</div>
                         </div>
                         <button onclick="deleteBirthday(${b.id})" title="Delete"
