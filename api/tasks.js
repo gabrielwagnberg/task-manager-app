@@ -347,12 +347,28 @@ module.exports = async (req, res) => {
     }
 
     if (method === 'DELETE') {
-      const { id } = req.body;
+      const { id, ids } = req.body;
 
       const doc = await initializeSheet();
       const sheet = doc.sheetsByIndex[0];
       const rows = await sheet.getRows();
 
+      // Bulk delete — accepts { ids: [...] }
+      // Rows are deleted bottom-to-top (descending array index) so that row-index
+      // shifting after each deletion does not affect the indices of remaining targets.
+      if (ids && Array.isArray(ids)) {
+        const idsSet = new Set(ids.map(String));
+        const toDelete = rows
+          .map((row, idx) => ({ row, idx }))
+          .filter(({ row }) => idsSet.has(String(row.get('Task ID'))))
+          .sort((a, b) => b.idx - a.idx); // highest index first
+        for (const { row } of toDelete) {
+          await row.delete();
+        }
+        return res.status(200).json({ ids });
+      }
+
+      // Single delete — accepts { id: ... }
       const row = rows.find(r => r.get('Task ID') == id);
 
       if (!row) {

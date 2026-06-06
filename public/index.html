@@ -1872,11 +1872,17 @@
             shoppingList.hidden = false;
             loading.hidden = true;
             renderIcons();
-            // Show delete-checked button only when there are purchased items in the current view
+            // Show delete-checked button only when there are purchased items in the current view.
+            // Also update the label to make it explicit which category will be cleared.
             const visiblePurchased = shoppingItems.filter(i =>
                 i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
             );
-            document.getElementById('shopping-delete-checked-btn').hidden = visiblePurchased.length === 0;
+            const delBtn = document.getElementById('shopping-delete-checked-btn');
+            delBtn.hidden = visiblePurchased.length === 0;
+            if (!delBtn.hidden) {
+                delBtn.innerHTML = `<i data-lucide="trash-2" class="icon"></i> Delete Checked ${activeShoppingCategory}`;
+                renderIcons();
+            }
         }
 
         async function addShoppingItem() {
@@ -1973,11 +1979,14 @@
             if (done.length === 0) return;
             if (!confirm(`Delete ${done.length} completed task${done.length !== 1 ? 's' : ''}?`)) return;
             try {
-                await Promise.all(done.map(t => fetch('/api/tasks', {
+                // Single bulk-delete request — avoids the concurrent-delete race condition
+                // where parallel requests each read the same row-index snapshot and then
+                // shift each other's targets as rows are removed.
+                await fetch('/api/tasks', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: t.id }),
-                })));
+                    body: JSON.stringify({ ids: done.map(t => t.id) }),
+                });
                 await loadTasks();
             } catch (error) {
                 showError('tasks', 'Failed to delete some tasks');
@@ -1990,13 +1999,16 @@
                 i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
             );
             if (done.length === 0) return;
-            if (!confirm(`Delete ${done.length} purchased item${done.length !== 1 ? 's' : ''}?`)) return;
+            if (!confirm(`Delete ${done.length} checked ${activeShoppingCategory.toLowerCase()} item${done.length !== 1 ? 's' : ''}?`)) return;
             try {
-                await Promise.all(done.map(i => fetch('/api/shopping', {
+                // Single bulk-delete request — avoids the concurrent-delete race condition
+                // where parallel requests each read the same row-index snapshot and then
+                // shift each other's targets as rows are removed.
+                await fetch('/api/shopping', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ id: i.id }),
-                })));
+                    body: JSON.stringify({ ids: done.map(i => i.id) }),
+                });
                 await loadShopping();
             } catch (error) {
                 showError('shopping', 'Failed to delete some items');
