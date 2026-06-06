@@ -1872,17 +1872,11 @@
             shoppingList.hidden = false;
             loading.hidden = true;
             renderIcons();
-            // Show delete-checked button only when there are purchased items in the current view.
-            // Also update the label to make it explicit which category will be cleared.
+            // Show delete-checked button only when there are purchased items in the current view
             const visiblePurchased = shoppingItems.filter(i =>
                 i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
             );
-            const delBtn = document.getElementById('shopping-delete-checked-btn');
-            delBtn.hidden = visiblePurchased.length === 0;
-            if (!delBtn.hidden) {
-                delBtn.innerHTML = `<i data-lucide="trash-2" class="icon"></i> Delete Checked ${activeShoppingCategory}`;
-                renderIcons();
-            }
+            document.getElementById('shopping-delete-checked-btn').hidden = visiblePurchased.length === 0;
         }
 
         async function addShoppingItem() {
@@ -1999,7 +1993,7 @@
                 i.category === activeShoppingCategory && matchesProjectFilter(i) && i.purchased
             );
             if (done.length === 0) return;
-            if (!confirm(`Delete ${done.length} checked ${activeShoppingCategory.toLowerCase()} item${done.length !== 1 ? 's' : ''}?`)) return;
+            if (!confirm(`Delete ${done.length} purchased item${done.length !== 1 ? 's' : ''}?`)) return;
             try {
                 // Single bulk-delete request — avoids the concurrent-delete race condition
                 // where parallel requests each read the same row-index snapshot and then
