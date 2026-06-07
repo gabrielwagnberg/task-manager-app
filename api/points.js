@@ -42,6 +42,7 @@ module.exports = async (req, res) => {
       taskId: row.get('Task ID'),
       taskName: row.get('Task Name'),
       pointValue: parseInt(row.get('Point Value')) || 1,
+      time: row.get('Time') || '',
     }));
 
     return res.status(200).json(points);

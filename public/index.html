@@ -474,6 +474,37 @@
             flex: 1;
         }
 
+        /* Check-off history log (recurring + point tasks) */
+        .history-section {
+            margin-bottom: 20px;
+            border-top: 1px solid #f0f0f0;
+            padding-top: 14px;
+        }
+        .history-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 10px;
+        }
+        .history-empty {
+            font-size: 14px;
+            color: #bbb;
+            font-style: italic;
+        }
+        .history-entry {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #f9f9f9;
+        }
+        .history-entry:last-child { border-bottom: none; }
+        .history-user { font-weight: 500; color: #333; }
+        .history-date { color: #9ca3af; font-size: 13px; }
+
         /* Edit form inside modal */
         .modal-edit-form {
             display: flex;
@@ -1277,6 +1308,7 @@
             <!-- Detail view -->
             <div id="modal-detail">
                 <div class="detail-rows" id="modal-detail-rows"></div>
+                <div id="modal-task-history"></div>
                 <div class="modal-actions">
                     <button class="modal-btn modal-btn-secondary" onclick="switchToEditMode()">Edit</button>
                     <button class="modal-btn modal-btn-danger" id="modal-delete-btn" onclick="modalDelete()">Delete</button>
@@ -1772,9 +1804,9 @@
                 const response = await fetch('/api/tasks', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    // Send the client's local date so the server anchors recurrence to the
-                    // user's calendar day, not the UTC day (which can differ by 1–2 hours).
-                    body: JSON.stringify({ id, completed, clientToday: todayStr(), completedBy: currentUser }),
+                    // Send the client's local date and time so the server anchors recurrence
+                    // to the user's calendar day, and logs the correct local check-off time.
+                    body: JSON.stringify({ id, completed, clientToday: todayStr(), clientTime: new Date().toLocaleTimeString('sv', { hour: '2-digit', minute: '2-digit' }), completedBy: currentUser }),
                 });
 
                 if (response.ok) {
@@ -2848,7 +2880,7 @@
         let modalItem = null;
         let currentDayDate = null;  // set when day popup is open
 
-        function openModal(type, id) {
+        async function openModal(type, id) {
             let data;
             if (type === 'task')     data = tasks.find(t => t.id == id);
             if (type === 'shopping') data = shoppingItems.find(i => i.id == id);
@@ -2857,6 +2889,12 @@
             if (!data) return;
 
             modalItem = { type, data };
+
+            // For recurring point-tasks, make sure the check-off log is available before rendering.
+            if (type === 'task' && data.recurring && data.countsAsPoint && !pointsLoaded) {
+                await loadPoints();
+            }
+
             renderDetailView();
             document.getElementById('modal-overlay').classList.add('open');
         }
@@ -2952,6 +2990,43 @@
                     <span class="detail-value">${value}</span>
                 </div>
             `).join('');
+
+            // ── Check-off history log (recurring + point tasks only) ──────────
+            const historyEl = document.getElementById('modal-task-history');
+            if (type === 'task' && data.recurring && data.countsAsPoint) {
+                const LOG_LIMIT = 20;
+                const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                const allEntries = points.filter(p => String(p.taskId) === String(data.id));
+                const sorted = [...allEntries].sort((a, b) => {
+                    const dc = (b.date || '').localeCompare(a.date || '');
+                    return dc !== 0 ? dc : (b.time || '').localeCompare(a.time || '');
+                });
+                const shown = sorted.slice(0, LOG_LIMIT);
+                const titleSuffix = allEntries.length > LOG_LIMIT ? ` (last ${LOG_LIMIT})` : '';
+
+                const formatEntry = (p) => {
+                    const parts = (p.date || '').split('-').map(Number);
+                    const dateStr = (parts.length === 3 && parts[0])
+                        ? `${parts[2]} ${monthNames[parts[1] - 1]}`
+                        : (p.date || '—');
+                    return p.time ? `${dateStr} at ${p.time}` : dateStr;
+                };
+
+                historyEl.innerHTML = `
+                    <div class="history-section">
+                        <div class="history-title">Check-off log${titleSuffix}</div>
+                        ${shown.length === 0
+                            ? '<div class="history-empty">No check-offs recorded yet</div>'
+                            : shown.map(p => `
+                                <div class="history-entry">
+                                    <span class="history-user">${escapeHtml(p.user || '—')}</span>
+                                    <span class="history-date">${formatEntry(p)}</span>
+                                </div>`).join('')
+                        }
+                    </div>`;
+            } else {
+                historyEl.innerHTML = '';
+            }
 
             hideAllPanels();
             document.getElementById('modal-detail').hidden = false;

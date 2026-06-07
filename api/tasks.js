@@ -51,16 +51,17 @@ const REQUIRED_HEADERS = [
 ];
 
 // Get the Points sheet, creating it if it doesn't exist yet.
-// Also migrates existing sheets to add the Point Value column.
+// Also migrates existing sheets to add Point Value and Time columns.
 const getOrCreatePointsSheet = async (doc) => {
   const title = 'Points';
-  const headers = ['Point ID', 'User', 'Date', 'Task ID', 'Task Name', 'Point Value'];
+  const headers = ['Point ID', 'User', 'Date', 'Task ID', 'Task Name', 'Point Value', 'Time'];
   if (doc.sheetsByTitle[title]) {
     const sheet = doc.sheetsByTitle[title];
     await sheet.loadHeaderRow();
     const existing = sheet.headerValues || [];
-    if (!existing.includes('Point Value')) {
-      await sheet.setHeaderRow([...existing, 'Point Value']);
+    const missing = ['Point Value', 'Time'].filter(h => !existing.includes(h));
+    if (missing.length > 0) {
+      await sheet.setHeaderRow([...existing, ...missing]);
     }
     return sheet;
   }
@@ -316,6 +317,7 @@ module.exports = async (req, res) => {
             'Task ID': String(id),
             'Task Name': row.get('Task Name'),
             'Point Value': taskPointValue,
+            'Time': body.clientTime || '',
           });
         }
 
@@ -340,6 +342,7 @@ module.exports = async (req, res) => {
           'Task ID': String(id),
           'Task Name': row.get('Task Name'),
           'Point Value': taskPointValue,
+          'Time': body.clientTime || '',
         });
       }
 
