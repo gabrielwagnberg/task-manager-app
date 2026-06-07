@@ -494,16 +494,18 @@
             font-style: italic;
         }
         .history-entry {
-            display: flex;
-            justify-content: space-between;
+            display: grid;
+            grid-template-columns: 52px 44px 1fr;
+            gap: 10px;
             align-items: center;
             padding: 6px 0;
             font-size: 14px;
             border-bottom: 1px solid #f9f9f9;
         }
         .history-entry:last-child { border-bottom: none; }
-        .history-user { font-weight: 500; color: #333; }
         .history-date { color: #9ca3af; font-size: 13px; }
+        .history-time { color: #9ca3af; font-size: 13px; }
+        .history-user { font-weight: 500; color: #333; }
 
         /* Edit form inside modal */
         .modal-edit-form {
@@ -3004,13 +3006,13 @@
                 const shown = sorted.slice(0, LOG_LIMIT);
                 const titleSuffix = allEntries.length > LOG_LIMIT ? ` (last ${LOG_LIMIT})` : '';
 
-                const formatEntry = (p) => {
+                const formatDate = (p) => {
                     const parts = (p.date || '').split('-').map(Number);
-                    const dateStr = (parts.length === 3 && parts[0])
+                    return (parts.length === 3 && parts[0])
                         ? `${parts[2]} ${monthNames[parts[1] - 1]}`
                         : (p.date || '—');
-                    return p.time ? `${dateStr} at ${p.time}` : dateStr;
                 };
+                const formatTime = (p) => p.time || '—';
 
                 historyEl.innerHTML = `
                     <div class="history-section">
@@ -3019,8 +3021,9 @@
                             ? '<div class="history-empty">No check-offs recorded yet</div>'
                             : shown.map(p => `
                                 <div class="history-entry">
+                                    <span class="history-date">${formatDate(p)}</span>
+                                    <span class="history-time">${formatTime(p)}</span>
                                     <span class="history-user">${escapeHtml(p.user || '—')}</span>
-                                    <span class="history-date">${formatEntry(p)}</span>
                                 </div>`).join('')
                         }
                     </div>`;
