@@ -68,6 +68,25 @@ const getOrCreatePointsSheet = async (doc) => {
   return doc.addSheet({ title, headerValues: headers });
 };
 
+// Keep the Points sheet tidy: after a new row is added for a task, trim any
+// entries that push the per-task total above CAP (oldest entries deleted first).
+// pointRows is the full rows array fetched BEFORE addRow, so the post-add
+// count is taskRows.length + 1 — we delete down to CAP from there.
+const POINTS_CAP = 50;
+const trimPointRowsForTask = async (pointRows, taskId) => {
+  const taskRows = pointRows
+    .map((row, idx) => ({ row, idx }))
+    .filter(({ row }) => String(row.get('Task ID')) === String(taskId));
+  if (taskRows.length < POINTS_CAP) return; // post-add total is still within cap
+  // Sort by Point ID ascending so we can identify the oldest entries
+  taskRows.sort((a, b) => (parseInt(a.row.get('Point ID')) || 0) - (parseInt(b.row.get('Point ID')) || 0));
+  const excess = taskRows.length - POINTS_CAP + 1; // +1 for the row just added
+  const toDelete = taskRows.slice(0, excess);
+  // Delete highest sheet index first to avoid row-number shifting (same as bulk task delete)
+  toDelete.sort((a, b) => b.idx - a.idx);
+  for (const { row } of toDelete) await row.delete();
+};
+
 // Make sure every required column exists in the header row, appending any
 // that are missing (preserves existing columns/data). Lets the recurrence
 // feature work without manually editing the Google Sheet. Call this BEFORE
@@ -319,6 +338,7 @@ module.exports = async (req, res) => {
             'Point Value': taskPointValue,
             'Time': body.clientTime || '',
           });
+          await trimPointRowsForTask(pointRows, id);
         }
 
         return res.status(200).json({ id, completed: false, recurring: true, lastDone: today, nextDue });
@@ -344,6 +364,7 @@ module.exports = async (req, res) => {
           'Point Value': taskPointValue,
           'Time': body.clientTime || '',
         });
+        await trimPointRowsForTask(pointRows, id);
       }
 
       return res.status(200).json({ id, completed });

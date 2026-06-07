@@ -2996,7 +2996,7 @@
             // ── Check-off history log (recurring + point tasks only) ──────────
             const historyEl = document.getElementById('modal-task-history');
             if (type === 'task' && data.recurring && data.countsAsPoint) {
-                const LOG_LIMIT = 20;
+                const LOG_LIMIT = 50;
                 const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 const allEntries = points.filter(p => String(p.taskId) === String(data.id));
                 const sorted = [...allEntries].sort((a, b) => {
