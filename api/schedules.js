@@ -98,8 +98,6 @@ module.exports = async (req, res) => {
         const { name, owner, shared, assignedTo, project, startTime, endTime,
                 frequency, rate, seriesStart, seriesEnd } = req.body;
         if (!name)        return res.status(400).json({ error: 'Name is required' });
-        if (!startTime)   return res.status(400).json({ error: 'Start time is required' });
-        if (!endTime)     return res.status(400).json({ error: 'End time is required' });
         if (!seriesStart) return res.status(400).json({ error: 'Series start date is required' });
 
         const schedSheet = await getOrCreateSheet(doc, 'Schedules', SCHEDULE_HEADERS);
